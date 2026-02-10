@@ -118,6 +118,7 @@ void AppState::InitBuffer() {
                 }
             }
             g_hist.Add(c.book, curBookIdx, curChNum, trans);
+            if (!isNavigating) PushNavPoint(curBookIdx, curChNum);
         }
     }, true); // Clear queue for jump
 }
@@ -209,11 +210,41 @@ void AppState::BookPageNext(Font font) {
     if (pageIdx < (int)pages.size() - 1) pageIdx++; 
 }
 
-void AppState::BookPagePrev(Font font) { 
-    if (pages.empty()) return; 
-    if (pageIdx <= 0) { if (!isLoading) GrowTop(); } 
-    else pageIdx--; 
+void AppState::BookPagePrev(Font font) { if (pages.empty()) return; if (pageIdx <= 0) { if (!isLoading) GrowTop(); } else pageIdx--; }
+
+
+
+void AppState::PrevBook() {
+
+    if (curBookIdx > 0) {
+
+        curBookIdx--; curChNum = 1;
+
+        targetScrollY = 0; scrollY = 0; InitBuffer();
+
+        if (bookMode) needsPageRebuild = true;
+
+    }
+
 }
+
+
+
+void AppState::NextBook() {
+
+    if (curBookIdx < (int)BIBLE_BOOKS.size() - 1) {
+
+        curBookIdx++; curChNum = 1;
+
+        targetScrollY = 0; scrollY = 0; InitBuffer();
+
+        if (bookMode) needsPageRebuild = true;
+
+    }
+
+}
+
+
 
 void AppState::ForceRefresh(Font font) {
     std::string p = "cache/" + trans + "/" + BIBLE_BOOKS[curBookIdx].abbrev + "/" + std::to_string(curChNum) + ".json";
@@ -228,6 +259,64 @@ void AppState::UpdateTitle() {
         SetWindowTitle(t.c_str()); 
     }
     else SetWindowTitle("RayBible");
+}
+
+void AppState::PushNavPoint(int b, int c) {
+    if (navIndex >= 0 && navHistory[navIndex].bookIdx == b && navHistory[navIndex].chNum == c) return;
+    
+    // Clear future history if we were in the middle
+    if (navIndex < (int)navHistory.size() - 1) {
+        navHistory.erase(navHistory.begin() + navIndex + 1, navHistory.end());
+    }
+    
+    navHistory.push_back({b, c});
+    navIndex = (int)navHistory.size() - 1;
+    if (navHistory.size() > 50) {
+        navHistory.erase(navHistory.begin());
+        navIndex--;
+    }
+}
+
+void AppState::GoBack() {
+    if (navIndex > 0) {
+        navIndex--;
+        isNavigating = true;
+        curBookIdx = navHistory[navIndex].bookIdx;
+        curChNum = navHistory[navIndex].chNum;
+        InitBuffer();
+        isNavigating = false;
+    }
+}
+
+void AppState::GoForward() {
+    if (navIndex < (int)navHistory.size() - 1) {
+        navIndex++;
+        isNavigating = true;
+        curBookIdx = navHistory[navIndex].bookIdx;
+        curChNum = navHistory[navIndex].chNum;
+        InitBuffer();
+        isNavigating = false;
+    }
+}
+
+void AppState::PrevSequential() {
+    int b = curBookIdx, c = curChNum;
+    if (PrevChapter(b, c)) {
+        curBookIdx = b; curChNum = c;
+        targetScrollY = 0; scrollY = 0;
+        InitBuffer();
+        if (bookMode) needsPageRebuild = true;
+    }
+}
+
+void AppState::NextSequential() {
+    int b = curBookIdx, c = curChNum;
+    if (NextChapter(b, c)) {
+        curBookIdx = b; curChNum = c;
+        targetScrollY = 0; scrollY = 0;
+        InitBuffer();
+        if (bookMode) needsPageRebuild = true;
+    }
 }
 
 void AppState::StartGlobalSearch() {

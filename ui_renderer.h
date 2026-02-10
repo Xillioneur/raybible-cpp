@@ -23,6 +23,7 @@ void DrawJumpPanel(AppState& s, Font f);
 void DrawPlanPanel(AppState& s, Font f);
 void DrawGlobalSearchPanel(AppState& s, Font f);
 void DrawHelpPanel(AppState& s, Font f);
+void DrawBurgerMenu(AppState& s, Font f);
 
 void SaveVerseImage(const Verse& v, const std::string& ref, const std::string& trans, Font font);
 

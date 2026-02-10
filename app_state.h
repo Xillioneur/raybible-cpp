@@ -18,7 +18,17 @@ void DrawTooltip(struct AppState& s, Font f);
 #include <functional>
 #include <queue>
 
+struct NavPoint {
+    int bookIdx;
+    int chNum;
+};
+
 struct AppState {
+    // --- Navigation History ---
+    std::vector<NavPoint> navHistory;
+    int navIndex = -1;
+    bool isNavigating = false;
+
     // --- UI/UX Extras ---
     bool showHelp = false;
     char tooltip[64]{};
@@ -92,6 +102,7 @@ struct AppState {
     bool showCache     = false;
     bool showJump      = false;
     bool showPlan      = false;
+    bool showBurgerMenu = false;
     char jumpBuf[128]{};
     CacheStats cacheStats{};
 
@@ -121,8 +132,15 @@ struct AppState {
     void RebuildPages(Font font);
     void BookPageNext(Font font);
     void BookPagePrev(Font font);
+    void PrevBook();
+    void NextBook();
     void ForceRefresh(Font font);
     void UpdateTitle();
+    void GoBack();
+    void GoForward();
+    void PrevSequential();
+    void NextSequential();
+    void PushNavPoint(int b, int c);
     void StartGlobalSearch();
     void UpdateGlobalSearch();
     void Update(); // Main thread update

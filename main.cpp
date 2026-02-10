@@ -15,13 +15,13 @@ int main() {
     Font font = GetFontDefault();
 #ifdef __APPLE__
     const char* fontPath = "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
-    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 0);
+    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 3000);
 #elif defined(_WIN32)
     const char* fontPath = "C:\\Windows\\Fonts\\times.ttf";
-    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 0);
+    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 3000);
 #else
     const char* paths[] = { "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf", "/usr/share/fonts/TTF/Times.TTF", "/usr/share/fonts/truetype/freefont/FreeSerif.ttf" };
-    for (const char* p : paths) { if (FileExists(p)) { font = LoadFontEx(p, 64, 0, 0); break; } }
+    for (const char* p : paths) { if (FileExists(p)) { font = LoadFontEx(p, 64, 0, 3000); break; } }
 #endif
     SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
 
@@ -65,7 +65,7 @@ int main() {
         if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
 
         if (IsKeyPressed(KEY_ESCAPE)) {
-            state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = false;
+            state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = state.showBurgerMenu = false;
             memset(state.searchBuf, 0, sizeof(state.searchBuf)); memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); memset(state.gSearchBuf, 0, sizeof(state.gSearchBuf));
         }
 
@@ -119,6 +119,10 @@ int main() {
         if (state.showCache) DrawCachePanel(state, font);
         if (state.showPlan) DrawPlanPanel(state, font);
         if (state.showHelp) DrawHelpPanel(state, font);
+        if (state.showBurgerMenu) {
+            extern void DrawBurgerMenu(AppState& s, Font f);
+            DrawBurgerMenu(state, font);
+        }
         DrawTooltip(state, font);
         EndDrawing();
     }
