@@ -28,9 +28,17 @@ int main() {
     AppState state;
     state.InitBuffer();
 
+    float saveTimer = 1.0f;
+
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
         if (state.statusTimer > 0) state.statusTimer -= dt;
+        
+        saveTimer -= dt;
+        if (saveTimer <= 0) {
+            state.SaveSettings();
+            saveTimer = 1.0f;
+        }
 
         state.scrollY += (state.targetScrollY - state.scrollY) * 12.0f * dt;
         if (std::abs(state.targetScrollY - state.scrollY) < 0.5f) state.scrollY = state.targetScrollY;
@@ -47,6 +55,11 @@ int main() {
         if (ctrl && IsKeyPressed(KEY_D)) state.ToggleDarkMode();
         if (ctrl && IsKeyPressed(KEY_H)) state.showHistory = !state.showHistory;
         if (ctrl && IsKeyPressed(KEY_R)) state.ForceRefresh(font);
+        if (ctrl && IsKeyPressed(KEY_G)) state.showGlobalSearch = !state.showGlobalSearch;
+        if (ctrl && IsKeyPressed(KEY_P)) state.showPlan = !state.showPlan;
+        if (ctrl && IsKeyPressed(KEY_S)) { state.showCache = !state.showCache; if (state.showCache) state.cacheStats = g_cache.Stats(); }
+        if (ctrl && IsKeyPressed(KEY_B)) { state.bookMode = !state.bookMode; if (state.bookMode) state.needsPageRebuild = true; state.SaveSettings(); }
+        
         if (ctrl && IsKeyPressed(KEY_F)) { state.showSearch = !state.showSearch; if (!state.showSearch) { memset(state.searchBuf, 0, sizeof(state.searchBuf)); state.searchResults.clear(); } }
         if (ctrl && IsKeyPressed(KEY_J)) { state.showJump = !state.showJump; if (!state.showJump) memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); }
         if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
@@ -92,9 +105,12 @@ int main() {
 
         BeginDrawing();
         ClearBackground(state.bg);
-        DrawHeader(state, font);
+        
         if (state.bookMode) DrawBookMode(state, font); else DrawScrollMode(state, font);
         DrawFooter(state, font);
+        
+        DrawHeader(state, font);
+
         if (state.showSearch) DrawSearchPanel(state, font);
         if (state.showGlobalSearch) DrawGlobalSearchPanel(state, font);
         if (state.showJump) DrawJumpPanel(state, font);

@@ -66,6 +66,15 @@ bool CacheManager::Save(const Chapter& ch) const {
     return WriteFile(Path(ch.translation, ba, ch.chapter), j.str());
 }
 
+void CacheManager::ClearCache() {
+#ifdef _WIN32
+    system("rmdir /s /q cache");
+#else
+    system("rm -rf cache");
+#endif
+    MakeDir(base);
+}
+
 CacheStats CacheManager::Stats() const {
     CacheStats s{};
     for (const auto& tr : TRANSLATIONS) {
@@ -202,6 +211,8 @@ void SettingsManager::Load() {
         else if (key == "parallelMode") iss >> parallelMode;
         else if (key == "transIdx2") iss >> transIdx2;
         else if (key == "bookMode") iss >> bookMode;
+        else if (key == "lastScrollY") iss >> lastScrollY;
+        else if (key == "lastPageIdx") iss >> lastPageIdx;
     }
 }
 void SettingsManager::Save() {
@@ -214,7 +225,9 @@ void SettingsManager::Save() {
       << "lastTransIdx " << lastTransIdx << "\n"
       << "parallelMode " << parallelMode << "\n" 
       << "transIdx2 " << transIdx2 << "\n" 
-      << "bookMode " << bookMode << "\n";
+      << "bookMode " << bookMode << "\n"
+      << "lastScrollY " << lastScrollY << "\n"
+      << "lastPageIdx " << lastPageIdx << "\n";
     WriteFile(file, o.str());
 }
 

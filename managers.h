@@ -16,6 +16,7 @@ public:
     bool Has(const std::string& t, const std::string& b, int c) const;
     Chapter Load(const std::string& t, const std::string& b, int cn) const;
     bool Save(const Chapter& ch) const;
+    void ClearCache();
     CacheStats Stats() const;
 };
 
@@ -56,6 +57,8 @@ public:
     bool parallelMode = false;
     int transIdx2 = 1;
     bool bookMode = false;
+    float lastScrollY = 0.0f;
+    int lastPageIdx = 0;
 
     void Load();
     void Save();

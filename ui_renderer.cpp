@@ -99,9 +99,29 @@ static void DrawVerseText(Font font, const Verse& v, float x, float& y, float ma
     Color nc = isFav ? Color{255, 210, 60, 255} : numCol; DrawTextEx(font, numLabel.c_str(), {x, y + 2}, numFSize, 1, nc);
     if (hovered || isFav) { const char* star = isFav ? "★" : "☆"; DrawTextEx(font, star, {x + numSz.x + 2, y + 2}, numFSize, 1, nc); }
     float tx = x + numSz.x + (hovered || isFav ? 15.0f : 8.0f); auto lines = WrapText(v.text, font, fSize, maxW - (tx - x));
+    
+    std::string fullLower = ToLower(v.text);
+
     for (size_t li = 0; li < lines.size(); li++) {
         float rx = (li == 0) ? tx : x + 10.0f;
-        for (const auto& m : matches) if (m.verseNumber == v.number) { DrawRectangleRec({rx - 2, y - 1, maxW - (rx - x), fSize + 2}, {hlCol.r, hlCol.g, hlCol.b, 40}); break; }
+        
+        // Keyword highlighting
+        for (const auto& m : matches) {
+            if (m.verseNumber == v.number) {
+                // Find where m.matchPos falls in this line
+                // This is a bit complex due to wrapping, let's do a simpler "contains" for now
+                // or just highlight the whole line if it contains the match
+                std::string lineLower = ToLower(lines[li]);
+                size_t p = 0;
+                while ((p = lineLower.find(ToLower(v.text.substr(m.matchPos, m.matchLen)), p)) != std::string::npos) {
+                    Vector2 pre = MeasureTextEx(font, lines[li].substr(0, p).c_str(), fSize, 1);
+                    Vector2 mid = MeasureTextEx(font, lines[li].substr(p, m.matchLen).c_str(), fSize, 1);
+                    DrawRectangleRec({rx + pre.x, y, mid.x, fSize + 2}, {hlCol.r, hlCol.g, hlCol.b, 120});
+                    p += m.matchLen;
+                }
+            }
+        }
+
         DrawTextEx(font, lines[li].c_str(), {rx, y}, fSize, 1, textCol); y += fSize + lSpacing;
     }
     y += vGap;
@@ -121,9 +141,17 @@ void DrawHelpPanel(AppState& s, Font f) {
     DrawRectangleLinesEx({px, py, pw, ph}, 2, s.vnum); DrawRectangleLinesEx({px + 4, py + 4, pw - 8, ph - 8}, 1, {s.vnum.r, s.vnum.g, s.vnum.b, 100});
     DrawTextEx(f, "RayBible Keyboard Shortcuts", {px + 20, py + 20}, 24, 1, s.accent);
     float y = py + 65; auto row = [&](const char* k, const char* d) { DrawTextEx(f, k, {px + 25, y}, 17, 1, s.vnum); DrawTextEx(f, d, {px + 180, y}, 17, 1, s.text); y += 28; };
-    row("Ctrl + F", "Search in current view"); row("Ctrl + J", "Jump to reference"); row("Ctrl + H", "View history"); row("Ctrl + D", "Toggle Dark/Light mode");
-    row("Ctrl + R", "Refresh current passage"); row("F1 or ?", "Show this help panel"); row("ESC", "Close any panel or dropdown"); row("Left / Right", "Turn page (Book mode)");
-    row("Space", "Next page (Book mode)"); row("Mouse Wheel", "Smooth scrolling"); row("Right Click", "Copy verse & Export image");
+    row("Ctrl + F", "Search in current view");
+    row("Ctrl + G", "Global Bible search");
+    row("Ctrl + J", "Jump to reference");
+    row("Ctrl + H", "View history");
+    row("Ctrl + P", "Daily reading plan");
+    row("Ctrl + S", "Cache statistics");
+    row("Ctrl + B", "Toggle Book/Scroll mode");
+    row("Ctrl + D", "Toggle Dark/Light mode");
+    row("Ctrl + R", "Refresh current passage");
+    row("F1 or ?", "Show this help panel");
+    row("ESC", "Close any panel or dropdown");
     Rectangle cb = {px + pw - 120, py + ph - 50, 100, 34}; bool ch = CheckCollisionPointRec(GetMousePosition(), cb);
     DrawRectangleRec(cb, ch ? s.accent : s.bg); DrawRectangleLinesEx(cb, 1, s.vnum); DrawTextEx(f, "Close", {cb.x + 28, cb.y + 8}, 18, 1, ch ? RAYWHITE : s.text);
     if (ch && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) s.showHelp = false;
@@ -185,6 +213,18 @@ void DrawCachePanel(AppState& s, Font f) {
     row("Chapters cached:", std::to_string(s.cacheStats.totalChapters)); row("Total verses:", std::to_string(s.cacheStats.totalVerses)); row("Disk usage:", FmtBytes(s.cacheStats.totalSize));
     y += 15; DrawTextEx(f, "By translation:", {px + 25, y}, 18, 1, s.accent); y += 32;
     for (const auto& t : TRANSLATIONS) { int cnt = 0; auto it = s.cacheStats.byTranslation.find(t.code); if (it != s.cacheStats.byTranslation.end()) cnt = it->second; row(("  " + t.code + ":").c_str(), std::to_string(cnt) + " chapters"); }
+    
+    Rectangle clrBtn = { px + 25, py + ph - 50, 140, 34 };
+    bool clrHov = CheckCollisionPointRec(GetMousePosition(), clrBtn);
+    DrawRectangleRec(clrBtn, clrHov ? s.err : s.hdr);
+    DrawRectangleLinesEx(clrBtn, 1, s.err);
+    DrawTextEx(f, "CLEAR CACHE", { clrBtn.x + 15, clrBtn.y + 8 }, 16, 1, clrHov ? RAYWHITE : s.err);
+    if (clrHov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        g_cache.ClearCache();
+        s.cacheStats = g_cache.Stats();
+        s.SetStatus("Cache cleared.", 2.0f);
+    }
+
     Rectangle cb = {px + pw - 120, py + ph - 50, 100, 34}; bool ch = CheckCollisionPointRec(GetMousePosition(), cb);
     DrawRectangleRec(cb, ch ? s.accent : s.bg); DrawRectangleLinesEx(cb, 1, s.vnum); DrawTextEx(f, "Close", {cb.x + 28, cb.y + 8}, 18, 1, ch ? RAYWHITE : s.text);
     if (ch && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) s.showCache = false;
@@ -286,8 +326,8 @@ void DrawHeader(AppState& s, Font f) {
     DrawRectangleRec(cMinus, cmH ? s.accent : s.bg); DrawRectangleLinesEx(cMinus, 1, s.vnum); DrawTextEx(f, "-", {cMinus.x + 11, cMinus.y + 4}, 20, 1, cmH ? RAYWHITE : s.text);
     std::string chLbl = std::to_string(s.curChNum); Vector2 chSz = MeasureTextEx(f, chLbl.c_str(), 17, 1); DrawTextEx(f, chLbl.c_str(), {cBase + 30 + (42 - chSz.x)/2, 22}, 17, 1, s.text);
     DrawRectangleRec(cPlus, cpH ? s.accent : s.bg); DrawRectangleLinesEx(cPlus, 1, s.vnum); DrawTextEx(f, "+", {cPlus.x + 10, cPlus.y + 4}, 20, 1, cpH ? RAYWHITE : s.text);
-    if (cmH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { PrevChapter(s.curBookIdx, s.curChNum); s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); }
-    if (cpH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { NextChapter(s.curBookIdx, s.curChNum); s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); }
+    if (cmH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { PrevChapter(s.curBookIdx, s.curChNum); s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; }
+    if (cpH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { NextChapter(s.curBookIdx, s.curChNum); s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; }
     float tx = 540; Rectangle tBtn = {tx, 15, 80, 30}; bool tHov = CheckCollisionPointRec(GetMousePosition(), tBtn);
     DrawRectangleRec(tBtn, s.bg); DrawRectangleLinesEx(tBtn, 1, tHov ? s.accent : s.vnum);
     std::string tLbl = TRANSLATIONS[s.transIdx].code; std::transform(tLbl.begin(), tLbl.end(), tLbl.begin(), ::toupper);
@@ -320,14 +360,14 @@ void DrawHeader(AppState& s, Font f) {
         float dy = H, dh = TRANSLATIONS.size() * 36.0f; DrawRectangle(tx, dy, 148, dh, s.hdr); DrawRectangleLinesEx({tx, dy, 148, dh}, 1, s.accent);
         for (int i = 0; i < (int)TRANSLATIONS.size(); i++) {
             Rectangle r = {tx, dy + i * 36.f, 148, 36}; bool hov = CheckCollisionPointRec(GetMousePosition(), r); if (hov) DrawRectangleRec(r, s.accent);
-            DrawTextEx(f, TRANSLATIONS[i].name.c_str(), {r.x + 8, r.y + 8}, 15, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.transIdx = i; s.trans = TRANSLATIONS[i].code; s.showTransDrop = false; s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); s.SaveSettings(); }
+            DrawTextEx(f, TRANSLATIONS[i].name.c_str(), {r.x + 8, r.y + 8}, 15, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.transIdx = i; s.trans = TRANSLATIONS[i].code; s.showTransDrop = false; s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; s.SaveSettings(); }
         }
     }
     if (s.showTransDrop2) {
         float tx2 = tx + 86, dy = H, dh = TRANSLATIONS.size() * 36.0f; DrawRectangle(tx2, dy, 148, dh, s.hdr); DrawRectangleLinesEx({tx2, dy, 148, dh}, 1, s.vnum);
         for (int i = 0; i < (int)TRANSLATIONS.size(); i++) {
             Rectangle r = {tx2, dy + i * 36.f, 148, 36}; bool hov = CheckCollisionPointRec(GetMousePosition(), r); if (hov) DrawRectangleRec(r, s.accent);
-            DrawTextEx(f, TRANSLATIONS[i].name.c_str(), {r.x + 8, r.y + 8}, 15, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.transIdx2 = i; s.trans2 = TRANSLATIONS[i].code; s.showTransDrop2 = false; s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); s.SaveSettings(); }
+            DrawTextEx(f, TRANSLATIONS[i].name.c_str(), {r.x + 8, r.y + 8}, 15, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.transIdx2 = i; s.trans2 = TRANSLATIONS[i].code; s.showTransDrop2 = false; s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; s.SaveSettings(); }
         }
     }
     if (s.showBookDrop) {
@@ -335,7 +375,7 @@ void DrawHeader(AppState& s, Font f) {
         for (int i = 0; i < (int)BIBLE_BOOKS.size(); i++) {
             float iy = dy + i * 32.f - s.bookDropScroll; if (iy < dy - 32 || iy > dy + visH) continue;
             Rectangle r = {240, iy, bkW, 32}; bool hov = CheckCollisionPointRec(GetMousePosition(), r); if (hov) DrawRectangleRec(r, s.accent);
-            DrawTextEx(f, BIBLE_BOOKS[i].name.c_str(), {r.x + 8, r.y + 7}, 16, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.curBookIdx = i; s.curChNum = 1; s.showBookDrop = false; s.bookDropScroll = 0; s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); }
+            DrawTextEx(f, BIBLE_BOOKS[i].name.c_str(), {r.x + 8, r.y + 7}, 16, 1, hov ? RAYWHITE : s.text); if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { s.curBookIdx = i; s.curChNum = 1; s.showBookDrop = false; s.bookDropScroll = 0; s.scrollY = 0; s.targetScrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; }
         }
         EndScissorMode(); if (CheckCollisionPointRec(GetMousePosition(), {240, dy, bkW, visH})) { s.bookDropScroll -= GetMouseWheelMove() * 32; float maxScroll = BIBLE_BOOKS.size() * 32.f - visH; if (s.bookDropScroll < 0) s.bookDropScroll = 0; if (s.bookDropScroll > maxScroll) s.bookDropScroll = maxScroll; }
     }
@@ -345,8 +385,20 @@ void DrawScrollMode(AppState& s, Font f) {
     std::lock_guard<std::mutex> lock(s.bufferMutex);
     const float TOP = 60, BOT = 38; float h = GetScreenHeight() - TOP - BOT;
     bool overlayOpen = s.showSearch || s.showHistory || s.showFavorites || s.showCache || s.showBookDrop || s.showTransDrop || s.showTransDrop2 || s.showJump || s.showPlan || s.showGlobalSearch || s.showHelp;
-    if (!overlayOpen) { float wheel = GetMouseWheelMove(); if (CheckCollisionPointRec(GetMousePosition(), {0, TOP, (float)GetScreenWidth(), h})) s.targetScrollY += wheel * 100.0f; }
-    const float PAD = 40, FS = s.fontSize, LS = s.lineSpacing, VG = 14; BeginScissorMode(0, (int)TOP, GetScreenWidth(), (int)h); float yFinal = TOP + 18 + s.scrollY;
+    if (!overlayOpen && !s.isLoading) { float wheel = GetMouseWheelMove(); if (CheckCollisionPointRec(GetMousePosition(), {0, TOP, (float)GetScreenWidth(), h})) s.targetScrollY += wheel * 100.0f; }
+    
+    const float PAD = 40, FS = s.fontSize, LS = s.lineSpacing, VG = 14; 
+    BeginScissorMode(0, (int)TOP, GetScreenWidth(), (int)h); 
+    
+    if (s.buf.empty()) {
+        const char* msg = s.isLoading ? "Loading..." : "No content.";
+        Vector2 ms = MeasureTextEx(f, msg, 20, 1);
+        DrawTextEx(f, msg, {(GetScreenWidth() - ms.x)/2.0f, TOP + h/2.0f}, 20, 1, s.vnum);
+        EndScissorMode();
+        return;
+    }
+
+    float yFinal = TOP + 18 + s.scrollY;
     if (s.parallelMode) {
         float colW = (GetScreenWidth() - PAD * 3) / 2.0f, y1 = TOP + 18 + s.scrollY, y2 = TOP + 18 + s.scrollY;
         for (int ci = 0; ci < (int)s.buf.size(); ci++) {

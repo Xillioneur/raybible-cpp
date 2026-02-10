@@ -14,6 +14,10 @@ void DrawScrollMode(struct AppState& s, Font f);
 void DrawBookMode(struct AppState& s, Font f);
 void DrawTooltip(struct AppState& s, Font f);
 
+#include <condition_variable>
+#include <functional>
+#include <queue>
+
 struct AppState {
     // --- UI/UX Extras ---
     bool showHelp = false;
@@ -21,6 +25,16 @@ struct AppState {
     std::atomic<bool> isLoading{false};
     std::atomic<bool> needsPageRebuild{false};
     std::mutex bufferMutex;
+
+    // --- Threading ---
+    std::thread workerThread;
+    std::mutex queueMutex;
+    std::condition_variable queueCondVar;
+    std::queue<std::function<void()>> taskQueue;
+    std::atomic<bool> quitWorker{false};
+
+    void PushTask(std::function<void()> task, bool clearQueue = false);
+    void WorkerLoop();
 
     // --- Global Search ---
     bool showGlobalSearch = false;
@@ -95,6 +109,7 @@ struct AppState {
     Color bg, text, accent, hdr, vnum, ok, err, pageBg, pageShadow;
 
     AppState();
+    ~AppState();
     void SaveSettings();
     void UpdateColors();
     void ToggleDarkMode();
@@ -110,6 +125,7 @@ struct AppState {
     void UpdateTitle();
     void StartGlobalSearch();
     void UpdateGlobalSearch();
+    void Update(); // Main thread update
 };
 
 #endif // APP_STATE_H

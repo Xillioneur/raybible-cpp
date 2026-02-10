@@ -1,9 +1,11 @@
 darkMode 0
 fontSize 19
 lineSpacing 7
-lastBookIdx 0
+lastBookIdx 62
 lastChNum 1
 lastTransIdx 0
 parallelMode 0
 transIdx2 1
-bookMode 1
+bookMode 0
+lastScrollY 60
+lastPageIdx 0
