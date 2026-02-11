@@ -18,6 +18,8 @@ void DrawTooltip(struct AppState& s, Font f);
 #include <functional>
 #include <queue>
 
+#include <set>
+
 struct NavPoint {
     int bookIdx;
     int chNum;
@@ -28,6 +30,12 @@ struct AppState {
     std::vector<NavPoint> navHistory;
     int navIndex = -1;
     bool isNavigating = false;
+
+    // --- Selection ---
+    std::set<int> selectedVerses; // Verse numbers selected in current chapter
+    void ToggleVerseSelection(int vNum);
+    void CopySelection();
+    void ClearSelection();
 
     // --- UI/UX Extras ---
     bool showHelp = false;
@@ -56,7 +64,13 @@ struct AppState {
 
     // --- Mode ---
     bool bookMode = false;
-    bool darkMode = true;
+    int  theme = 0; // 0: Dark, 1: Light, 2: Sepia, 3: Parchment
+    bool studyMode = false; // Enables Strong's numbers
+
+    // --- Word Study ---
+    bool showWordStudy = false;
+    StrongsDef currentStrongs;
+    void LookupStrongs(const std::string& number);
 
     // --- Current position ---
     int  curBookIdx = 42;
@@ -127,7 +141,7 @@ struct AppState {
     ~AppState();
     void SaveSettings();
     void UpdateColors();
-    void ToggleDarkMode();
+    void NextTheme();
     void SetStatus(const std::string& msg, float secs = 2.5f);
     void InitBuffer(bool resetScroll = true);
     void ToggleParallelMode(Font font);
@@ -149,7 +163,7 @@ struct AppState {
     void StartGlobalSearch();
     void UpdateGlobalSearch();
     void Update(); // Main thread update
-    bool InputActive() const { return showSearch || showJump || showGlobalSearch || showNoteEditor; }
+    bool InputActive() const { return showSearch || showJump || showGlobalSearch || showNoteEditor || showWordStudy; }
 };
 
 #endif // APP_STATE_H

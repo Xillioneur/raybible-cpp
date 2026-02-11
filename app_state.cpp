@@ -10,7 +10,7 @@
 
 AppState::AppState() {
     g_settings.Load();
-    darkMode = g_settings.darkMode; fontSize = g_settings.fontSize; lineSpacing = g_settings.lineSpacing;
+    theme = g_settings.theme; fontSize = g_settings.fontSize; lineSpacing = g_settings.lineSpacing;
     curBookIdx = g_settings.lastBookIdx; curChNum = g_settings.lastChNum; transIdx = g_settings.lastTransIdx;
     parallelMode = g_settings.parallelMode; transIdx2 = g_settings.transIdx2; bookMode = g_settings.bookMode;
     targetScrollY = scrollY = g_settings.lastScrollY;
@@ -49,28 +49,56 @@ void AppState::WorkerLoop() {
 }
 
 void AppState::SaveSettings() {
-    g_settings.darkMode = darkMode; g_settings.fontSize = fontSize; g_settings.lineSpacing = lineSpacing;
+    g_settings.theme = theme; g_settings.fontSize = fontSize; g_settings.lineSpacing = lineSpacing;
     g_settings.lastBookIdx = curBookIdx; g_settings.lastChNum = curChNum; g_settings.lastTransIdx = transIdx;
     g_settings.parallelMode = parallelMode; g_settings.transIdx2 = transIdx2; g_settings.bookMode = bookMode;
-    g_settings.lastScrollY = targetScrollY; g_settings.lastPageIdx = pageIdx; g_settings.Save();
+    g_settings.lastScrollY = targetScrollY; g_settings.lastPageIdx = pageIdx;
+    g_settings.winW = GetScreenWidth(); g_settings.winH = GetScreenHeight();
+    Vector2 pos = GetWindowPosition(); g_settings.winX = (int)pos.x; g_settings.winY = (int)pos.y;
+    g_settings.Save();
 }
 
 void AppState::UpdateColors() {
-    if (darkMode) {
+    if (theme == 0) { // Dark
         bg = {15,15,15,255}; text = {220,210,190,255}; accent = {180,40,40,255}; hdr = {25,25,25,255}; vnum = {160,140,80,255};
         ok = {100,220,150,255}; err = {220,100,100,255}; pageBg = {30,28,25,255}; pageShadow = {0,0,0,180};
-    } else {
-        bg = {245,240,225,255}; text = {25,20,15,255}; accent = {140,20,20,255}; hdr = {235,230,215,255}; vnum = {180,140,40,255};
-        ok = {50,160,90,255}; err = {180,60,60,255}; pageBg = {255,253,245,255}; pageShadow = {0,0,0,60};
+    } else if (theme == 1) { // Light (White)
+        bg = {255,255,255,255}; text = {20,20,20,255}; accent = {180,20,20,255}; hdr = {245,245,245,255}; vnum = {140,120,40,255};
+        ok = {40,140,80,255}; err = {200,40,40,255}; pageBg = {255,255,255,255}; pageShadow = {0,0,0,40};
+    } else if (theme == 2) { // Sepia
+        bg = {220,205,180,255}; text = {60,40,30,255}; accent = {120,30,30,255}; hdr = {210,195,170,255}; vnum = {140,100,40,255};
+        ok = {40,120,60,255}; err = {160,40,40,255}; pageBg = {230,215,190,255}; pageShadow = {0,0,0,80};
+    } else if (theme == 3) { // Parchment
+        bg = {240,230,200,255}; text = {40,35,30,255}; accent = {100,20,20,255}; hdr = {230,220,190,255}; vnum = {160,120,40,255};
+        ok = {30,100,50,255}; err = {140,30,30,255}; pageBg = {245,240,220,255}; pageShadow = {0,0,0,50};
     }
 }
 
-void AppState::ToggleDarkMode() { darkMode = !darkMode; UpdateColors(); SaveSettings(); }
+void AppState::NextTheme() { theme = (theme + 1) % 4; UpdateColors(); SaveSettings(); }
 void AppState::SetStatus(const std::string& msg, float secs) { statusMsg = msg; statusTimer = secs; }
+
+void AppState::ToggleVerseSelection(int vNum) {
+    if (selectedVerses.count(vNum)) selectedVerses.erase(vNum);
+    else selectedVerses.insert(vNum);
+}
+
+void AppState::ClearSelection() { selectedVerses.clear(); }
+
+void AppState::CopySelection() {
+    if (selectedVerses.empty() || buf.empty() || !buf[0].isLoaded) return;
+    std::string full = buf[0].book + " (" + buf[0].translation + ")\n\n";
+    for (int vNum : selectedVerses) {
+        for (const auto& v : buf[0].verses) {
+            if (v.number == vNum) { full += std::to_string(v.number) + " " + v.text + "\n"; break; }
+        }
+    }
+    CopyToClipboard(full);
+    SetStatus("Selection copied!");
+}
 
 void AppState::InitBuffer(bool resetScroll) {
     isLoading = true;
-    if (resetScroll) { targetScrollY = 0; scrollY = 0; scrollChapterIdx = 0; }
+    if (resetScroll) { targetScrollY = 0; scrollY = 0; scrollChapterIdx = 0; ClearSelection(); }
     PushTask([this]() {
         { std::lock_guard<std::mutex> lock(bufferMutex); buf.clear(); buf2.clear(); }
         Chapter c = LoadOrFetch(curBookIdx, curChNum, trans);
@@ -185,7 +213,7 @@ void AppState::CopyChapter() {
 
 void AppState::UpdateTitle() {
     std::lock_guard<std::mutex> lock(bufferMutex);
-    int ci = bookMode ? 0 : scrollChapterIdx;
+    int ci = bookMode ? (pageIdx < (int)pages.size() ? pages[pageIdx].chapterBufIndex : 0) : scrollChapterIdx;
     if (ci < (int)buf.size() && buf[ci].isLoaded) { 
         std::string t = "RayBible - " + buf[ci].book; 
         if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; 
@@ -217,7 +245,7 @@ void AppState::StartGlobalSearch() {
             for (int c = 1; c <= BIBLE_BOOKS[b].chapters; c++) {
                 if (g_cache.Has(currentTrans, ba, c)) {
                     Chapter ch = g_cache.Load(currentTrans, ba, c);
-                    for (const auto& v : ch.verses) if (ToLower(v.text).find(query) != std::string::npos) { std::lock_guard<std::mutex> lock(bufferMutex); gSearchResults.push_back({b, c, v.number, BIBLE_BOOKS[b].name, v.text}); }
+                    for (const auto& v : ch.verses) if (ToLower(v.text).find(query) != std::string::npos) { std::lock_guard<std::mutex> lock(bufferMutex); gSearchResults.push_back({ch.bookIndex, c, v.number, BIBLE_BOOKS[b].name, v.text}); }
                 }
             }
             gSearchProgress = b + 1;
@@ -227,4 +255,45 @@ void AppState::StartGlobalSearch() {
 }
 
 void AppState::UpdateGlobalSearch() {}
-void AppState::Update() { UpdateTitle(); }
+void AppState::Update() { 
+    UpdateTitle(); 
+    // Sync current position with visible content
+    std::lock_guard<std::mutex> lock(bufferMutex);
+    int ci = bookMode ? (pageIdx < (int)pages.size() ? pages[pageIdx].chapterBufIndex : 0) : scrollChapterIdx;
+    if (ci >= 0 && ci < (int)buf.size() && buf[ci].isLoaded) {
+        curBookIdx = buf[ci].bookIndex;
+        curChNum = buf[ci].chapter;
+    }
+}
+
+void AppState::LookupStrongs(const std::string& number) {
+    if (number.empty()) return;
+    showWordStudy = true;
+    currentStrongs.active = false;
+    currentStrongs.number = number;
+    currentStrongs.definition = "Loading definition...";
+    
+    // Determine H or G based on current book
+    std::string prefix = (curBookIdx < 39) ? "H" : "G";
+    std::string query = prefix + number;
+    
+    PushTask([this, query]() {
+        std::string url = "https://bolls.life/dictionary-definition/BDBT/" + query + "/";
+        std::string resp = HttpGet(url);
+        if (resp.empty() || resp == "[]") {
+            currentStrongs.definition = "No definition found for " + query;
+            return;
+        }
+        
+        auto defs = JArr(resp, "");
+        if (!defs.empty()) {
+            std::string d = defs[0];
+            currentStrongs.lexeme = JStr(d, "lexeme");
+            currentStrongs.transliteration = JStr(d, "transliteration");
+            currentStrongs.pronunciation = JStr(d, "pronunciation");
+            currentStrongs.definition = StripTags(JStr(d, "definition"));
+            currentStrongs.shortDef = JStr(d, "short_definition");
+            currentStrongs.active = true;
+        }
+    });
+}

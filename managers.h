@@ -53,7 +53,7 @@ public:
 class SettingsManager {
     std::string file = "settings.txt";
 public:
-    bool darkMode = true;
+    int theme = 0; // 0: Dark, 1: Light, 2: Sepia, 3: Parchment
     float fontSize = 19.0f;
     float lineSpacing = 7.0f;
     int lastBookIdx = 42;
@@ -64,6 +64,12 @@ public:
     bool bookMode = false;
     float lastScrollY = 0.0f;
     int lastPageIdx = 0;
+    
+    // Window state
+    int winW = 1140;
+    int winH = 740;
+    int winX = -1;
+    int winY = -1;
 
     void Load();
     void Save();

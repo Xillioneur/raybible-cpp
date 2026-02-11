@@ -69,6 +69,68 @@ std::string ToLower(const std::string& s) {
     return r;
 }
 
+std::string StripTags(const std::string& s) {
+    if (s.empty()) return "";
+    std::string r = s;
+    
+    // 1. Decode HTML entities
+    size_t pos = 0;
+    auto replaceAll = [&](const std::string& from, const std::string& to) {
+        size_t p = 0;
+        while ((p = r.find(from, p)) != std::string::npos) {
+            r.replace(p, from.size(), to);
+            p += to.size();
+        }
+    };
+    replaceAll("&lt;", "<"); replaceAll("&gt;", ">"); replaceAll("&amp;", "&"); replaceAll("&quot;", "\"");
+
+    // 2. Remove Strong's tags and their numeric content: <S>3068</S> or <S 3068>
+    // We target anything starting with <S or <s followed by digits or >
+    std::string finalStr;
+    bool skippingStrong = false;
+    bool inTag = false;
+    std::string currentTag;
+
+    for (size_t i = 0; i < r.size(); ++i) {
+        char c = r[i];
+        if (c == '<') {
+            inTag = true;
+            currentTag = "";
+        } else if (c == '>') {
+            inTag = false;
+            // Check if we just closed a Strong's tag
+            if (currentTag == "S" || currentTag == "s" || (currentTag.size() > 1 && (currentTag[0] == 'S' || currentTag[0] == 's'))) {
+                // If it's an opening Strong's tag, start skipping until the closing tag
+                skippingStrong = true;
+            } else if (currentTag == "/S" || currentTag == "/s") {
+                skippingStrong = false;
+            }
+        } else if (inTag) {
+            currentTag += c;
+        } else if (!skippingStrong) {
+            finalStr += c;
+        }
+    }
+    
+    // 3. One more pass to catch any missed <...> patterns or isolated digits that look like Strong's
+    // But usually the state machine above is enough if the tags are balanced.
+    // Let's do a simple clean pass for any remaining tags.
+    std::string cleaned;
+    bool in = false;
+    for (char c : finalStr) {
+        if (c == '<') in = true;
+        else if (c == '>') in = false;
+        else if (!in) cleaned += c;
+    }
+
+    // Clean up double spaces
+    pos = 0;
+    while ((pos = cleaned.find("  ", pos)) != std::string::npos) { cleaned.replace(pos, 2, " "); }
+    if (!cleaned.empty() && cleaned[0] == ' ') cleaned.erase(0, 1);
+    
+    return cleaned;
+}
+
 static size_t SkipWS(const std::string& s, size_t p) {
     while (p < s.size() && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n' || s[p] == '\r')) p++;
     return p;
@@ -102,6 +164,22 @@ std::string JStr(const std::string& j, const std::string& k) {
     while ((pos = r.find("\\n", pos)) != std::string::npos) { r.replace(pos, 2, " "); pos += 1; }
     pos = 0;
     while ((pos = r.find("\\\"", pos)) != std::string::npos) { r.replace(pos, 2, "\""); pos += 1; }
+    
+    // Decode \uXXXX
+    pos = 0;
+    while ((pos = r.find("\\u", pos)) != std::string::npos) {
+        if (pos + 5 < r.size()) {
+            try {
+                int code = std::stoi(r.substr(pos + 2, 4), nullptr, 16);
+                std::string utf8;
+                if (code <= 0x7F) utf8 += (char)code;
+                else if (code <= 0x7FF) { utf8 += (char)(0xC0 | (code >> 6)); utf8 += (char)(0x80 | (code & 0x3F)); }
+                else { utf8 += (char)(0xE0 | (code >> 12)); utf8 += (char)(0x80 | ((code >> 6) & 0x3F)); utf8 += (char)(0x80 | (code & 0x3F)); }
+                r.replace(pos, 6, utf8);
+                pos += utf8.size();
+            } catch (...) { pos += 2; }
+        } else pos += 2;
+    }
     return r;
 }
 
@@ -125,9 +203,15 @@ long JLong(const std::string& j, const std::string& k) {
 
 std::vector<std::string> JArr(const std::string& j, const std::string& k) {
     std::vector<std::string> r;
-    size_t p = FindKey(j, k);
-    if (p == std::string::npos) return r;
-    p = SkipWS(j, p);
+    size_t p = 0;
+    if (!k.empty()) {
+        p = FindKey(j, k);
+        if (p == std::string::npos) return r;
+        p = SkipWS(j, p);
+    } else {
+        p = SkipWS(j, 0);
+    }
+    
     if (p >= j.size() || j[p] != '[') return r;
     p++;
     
@@ -138,9 +222,12 @@ std::vector<std::string> JArr(const std::string& j, const std::string& k) {
         if (j[e] == '\"' && (e == 0 || j[e-1] != '\\')) inStr = !inStr;
         if (!inStr) {
             if (j[e] == '[') depth++;
-            else if (j[e] == ']') depth--;
+            else if (j[e] == ']') {
+                depth--;
+                if (depth == 0) break;
+            }
         }
-        if (depth > 0) e++;
+        e++;
     }
     if (e >= j.size()) return r;
     std::string a = j.substr(p, e - p);

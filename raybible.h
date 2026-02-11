@@ -17,6 +17,7 @@
 struct Verse {
     int number;
     std::string text;
+    std::string rawText; // Original with Strong's tags
 };
 
 struct Chapter {
@@ -51,6 +52,16 @@ struct Page {
     int endVerse;
     int chapterBufIndex;
     bool isChapterStart;
+};
+
+struct StrongsDef {
+    std::string number;
+    std::string lexeme;
+    std::string transliteration;
+    std::string pronunciation;
+    std::string definition;
+    std::string shortDef;
+    bool active = false;
 };
 
 struct Favorite {

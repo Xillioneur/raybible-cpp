@@ -36,7 +36,8 @@ Chapter CacheManager::Load(const std::string& t, const std::string& b, int cn) c
     for (const auto& v : JArr(json, "verses")) {
         Verse vr;
         vr.number = JInt(v, "number");
-        vr.text   = JStr(v, "text");
+        vr.rawText = JStr(v, "rawText");
+        vr.text   = StripTags(JStr(v, "text"));
         if (!vr.text.empty()) ch.verses.push_back(vr);
     }
     return ch;
@@ -63,7 +64,10 @@ bool CacheManager::Save(const Chapter& ch) const {
         std::string t = ch.verses[i].text;
         size_t pos = 0;
         while ((pos = t.find("\"", pos)) != std::string::npos) { t.replace(pos, 1, "\\\""); pos += 2; }
-        j << "    {\"number\":" << ch.verses[i].number << ",\"text\":\"" << t << "\"}";
+        std::string rt = ch.verses[i].rawText;
+        pos = 0;
+        while ((pos = rt.find("\"", pos)) != std::string::npos) { rt.replace(pos, 1, "\\\""); pos += 2; }
+        j << "    {\"number\":" << ch.verses[i].number << ",\"text\":\"" << t << "\",\"rawText\":\"" << rt << "\"}";
         if (i + 1 < ch.verses.size()) j << ",";
         j << "\n";
     }
@@ -226,7 +230,7 @@ void SettingsManager::Load() {
     if (c.empty()) return;
     std::istringstream iss(c); std::string key;
     while (iss >> key) {
-        if (key == "darkMode") iss >> darkMode;
+        if (key == "theme") iss >> theme;
         else if (key == "fontSize") iss >> fontSize;
         else if (key == "lineSpacing") iss >> lineSpacing;
         else if (key == "lastBookIdx") iss >> lastBookIdx;
@@ -237,11 +241,15 @@ void SettingsManager::Load() {
         else if (key == "bookMode") iss >> bookMode;
         else if (key == "lastScrollY") iss >> lastScrollY;
         else if (key == "lastPageIdx") iss >> lastPageIdx;
+        else if (key == "winW") iss >> winW;
+        else if (key == "winH") iss >> winH;
+        else if (key == "winX") iss >> winX;
+        else if (key == "winY") iss >> winY;
     }
 }
 void SettingsManager::Save() {
     std::ostringstream o;
-    o << "darkMode " << darkMode << "\n" 
+    o << "theme " << theme << "\n" 
       << "fontSize " << fontSize << "\n" 
       << "lineSpacing " << lineSpacing << "\n"
       << "lastBookIdx " << lastBookIdx << "\n" 
@@ -251,7 +259,11 @@ void SettingsManager::Save() {
       << "transIdx2 " << transIdx2 << "\n" 
       << "bookMode " << bookMode << "\n"
       << "lastScrollY " << lastScrollY << "\n"
-      << "lastPageIdx " << lastPageIdx << "\n";
+      << "lastPageIdx " << lastPageIdx << "\n"
+      << "winW " << winW << "\n"
+      << "winH " << winH << "\n"
+      << "winX " << winX << "\n"
+      << "winY " << winY << "\n";
     WriteFile(file, o.str());
 }
 

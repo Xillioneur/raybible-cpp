@@ -9,8 +9,10 @@
 #include <cmath>
 
 int main() {
+    g_settings.Load();
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
-    InitWindow(1140, 740, "RayBible - Elegant Bible Reader");
+    InitWindow(g_settings.winW, g_settings.winH, "RayBible - Elegant Bible Reader");
+    if (g_settings.winX != -1 && g_settings.winY != -1) SetWindowPosition(g_settings.winX, g_settings.winY);
     SetTargetFPS(60);
 
     Font font = GetFontDefault();
@@ -56,21 +58,21 @@ int main() {
         bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) || IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
 
         if (!state.InputActive()) {
-            if (ctrl && IsKeyPressed(KEY_D)) state.ToggleDarkMode();
-            if (ctrl && IsKeyPressed(KEY_H)) state.showHistory = !state.showHistory;
+            if (ctrl && IsKeyPressed(KEY_D)) state.NextTheme();
+            if (ctrl && IsKeyPressed(KEY_H)) { bool val = !state.showHistory; closeAllPanels(state); state.showHistory = val; }
             if (ctrl && IsKeyPressed(KEY_R)) state.ForceRefresh(font);
-            if (ctrl && IsKeyPressed(KEY_G)) state.showGlobalSearch = !state.showGlobalSearch;
-            if (ctrl && IsKeyPressed(KEY_P)) state.showPlan = !state.showPlan;
-            if (ctrl && IsKeyPressed(KEY_S)) { state.showCache = !state.showCache; if (state.showCache) state.cacheStats = g_cache.Stats(); }
+            if (ctrl && IsKeyPressed(KEY_G)) { bool val = !state.showGlobalSearch; closeAllPanels(state); state.showGlobalSearch = val; }
+            if (ctrl && IsKeyPressed(KEY_P)) { bool val = !state.showPlan; closeAllPanels(state); state.showPlan = val; }
+            if (ctrl && IsKeyPressed(KEY_S)) { bool val = !state.showCache; closeAllPanels(state); state.showCache = val; if (state.showCache) state.cacheStats = g_cache.Stats(); }
             if (ctrl && IsKeyPressed(KEY_B)) { state.bookMode = !state.bookMode; if (state.bookMode) state.needsPageRebuild = true; state.SaveSettings(); }
             
-            if (ctrl && IsKeyPressed(KEY_F)) { state.showSearch = !state.showSearch; if (!state.showSearch) { memset(state.searchBuf, 0, sizeof(state.searchBuf)); state.searchResults.clear(); } }
-            if (ctrl && IsKeyPressed(KEY_J)) { state.showJump = !state.showJump; if (!state.showJump) memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); }
-            if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
+            if (ctrl && IsKeyPressed(KEY_F)) { bool val = !state.showSearch; closeAllPanels(state); state.showSearch = val; if (!state.showSearch) { memset(state.searchBuf, 0, sizeof(state.searchBuf)); state.searchResults.clear(); } }
+            if (ctrl && IsKeyPressed(KEY_J)) { bool val = !state.showJump; closeAllPanels(state); state.showJump = val; if (!state.showJump) memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); }
+            if (IsKeyPressed(KEY_F1)) { bool val = !state.showHelp; closeAllPanels(state); state.showHelp = val; }
         }
 
         if (IsKeyPressed(KEY_ESCAPE)) {
-            state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = state.showBurgerMenu = state.showNoteEditor = false;
+            closeAllPanels(state);
             memset(state.searchBuf, 0, sizeof(state.searchBuf)); memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); memset(state.gSearchBuf, 0, sizeof(state.gSearchBuf));
         }
 
@@ -93,8 +95,8 @@ int main() {
             }
         }
 
-        if (!state.showSearch && !state.showGlobalSearch && !state.showJump) {
-            int key = GetCharPressed(); if (key == '?') state.showHelp = !state.showHelp;
+        if (!state.showSearch && !state.showGlobalSearch && !state.showJump && !state.showWordStudy) {
+            int key = GetCharPressed(); if (key == '?') { bool val = !state.showHelp; closeAllPanels(state); state.showHelp = val; }
         }
 
         if (state.showSearch) {
@@ -108,13 +110,6 @@ int main() {
             int k = GetCharPressed(); while (k > 0) { size_t len = strlen(state.gSearchBuf); if (k >= 32 && k <= 126 && len < 254) { state.gSearchBuf[len] = (char)k; state.gSearchBuf[len + 1] = 0; } k = GetCharPressed(); }
             if (IsKeyPressed(KEY_BACKSPACE)) { size_t len = strlen(state.gSearchBuf); if (len > 0) state.gSearchBuf[len - 1] = 0; }
             if (IsKeyPressed(KEY_ENTER) && !state.gSearchActive) state.StartGlobalSearch();
-        }
-
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            Vector2 mp = GetMousePosition();
-            if (state.showBookDrop && !CheckCollisionPointRec(mp, {310, 60, 200, 400})) state.showBookDrop = false;
-            if (state.showTransDrop && !CheckCollisionPointRec(mp, {610, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop = false;
-            if (state.showTransDrop2 && !CheckCollisionPointRec(mp, {696, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop2 = false;
         }
 
         BeginDrawing();
@@ -132,6 +127,7 @@ int main() {
         if (state.showHelp) DrawHelpPanel(state, font);
         if (state.showBurgerMenu) DrawBurgerMenu(state, font);
         if (state.showNoteEditor) DrawNoteEditor(state, font);
+        if (state.showWordStudy) DrawWordStudyPanel(state, font);
         DrawTooltip(state, font);
         EndDrawing();
     }

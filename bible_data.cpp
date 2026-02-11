@@ -26,8 +26,11 @@ const std::vector<BookInfo> BIBLE_BOOKS = {
 };
 
 const std::vector<Translation> TRANSLATIONS = {
-    {"web","World English Bible"},
-    {"kjv","King James Version"},
-    {"bsb","Berean Standard Bible"},
-    {"bbe","Bible in Basic English"}
+    {"WEB","World English Bible"},
+    {"KJV","King James Version"},
+    {"DRB","Douay-Rheims (Catholic)"},
+    {"RSV","Revised Standard Version"},
+    {"ESV","English Standard Version"},
+    {"YLT","Young's Literal Translation"},
+    {"NKJV","New King James Version"}
 };
