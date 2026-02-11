@@ -16,9 +16,13 @@ std::string CacheManager::Path(const std::string& t, const std::string& b, int c
 std::string CacheManager::TDir(const std::string& t) const { return base + "/" + t; }
 std::string CacheManager::BDir(const std::string& t, const std::string& b) const { return base + "/" + t + "/" + b; }
 
-bool CacheManager::Has(const std::string& t, const std::string& b, int c) const { return FileExists(Path(t, b, c)); }
+bool CacheManager::Has(const std::string& t, const std::string& b, int c) const { 
+    std::lock_guard<std::mutex> lock(mtx);
+    return FileExists(Path(t, b, c)); 
+}
 
 Chapter CacheManager::Load(const std::string& t, const std::string& b, int cn) const {
+    std::lock_guard<std::mutex> lock(mtx);
     Chapter ch{};
     ch.isLoaded = false;
     std::string json = ReadFile(Path(t, b, cn));
@@ -39,6 +43,7 @@ Chapter CacheManager::Load(const std::string& t, const std::string& b, int cn) c
 }
 
 bool CacheManager::Save(const Chapter& ch) const {
+    std::lock_guard<std::mutex> lock(mtx);
     MakeDir(TDir(ch.translation));
     std::string ba;
     for (const auto& bk : BIBLE_BOOKS) {
@@ -67,6 +72,7 @@ bool CacheManager::Save(const Chapter& ch) const {
 }
 
 void CacheManager::ClearCache() {
+    std::lock_guard<std::mutex> lock(mtx);
 #ifdef _WIN32
     system("rmdir /s /q cache");
 #else
@@ -76,6 +82,7 @@ void CacheManager::ClearCache() {
 }
 
 CacheStats CacheManager::Stats() const {
+    std::lock_guard<std::mutex> lock(mtx);
     CacheStats s{};
     for (const auto& tr : TRANSLATIONS) {
         int tc = 0;
@@ -148,19 +155,31 @@ void FavoritesManager::Save() {
     WriteFile(file, o.str());
 }
 void FavoritesManager::Add(const std::string& book, int ch, int v, const std::string& t, const std::string& verseText, const std::string& n) {
+    std::lock_guard<std::mutex> lock(mtx);
     Favorite f; f.book = book; f.chapter = ch; f.verse = v; f.translation = t; f.text = verseText; f.note = n; f.addedAt = time(nullptr);
     for (const auto& ex : favs) if (ex.GetKey() == f.GetKey()) return;
     favs.push_back(f); Save();
 }
 void FavoritesManager::Remove(const std::string& book, int ch, int v, const std::string& t) {
+    std::lock_guard<std::mutex> lock(mtx);
     std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
     favs.erase(std::remove_if(favs.begin(), favs.end(), [&k](const Favorite& f) { return f.GetKey() == k; }), favs.end());
     Save();
 }
+void FavoritesManager::UpdateNote(const std::string& book, int ch, int v, const std::string& t, const std::string& note) {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (auto& f : favs) { if (f.GetKey() == k) { f.note = note; Save(); break; } }
+}
 bool FavoritesManager::Has(const std::string& book, int ch, int v, const std::string& t) const {
+    std::lock_guard<std::mutex> lock(mtx);
     std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
     for (const auto& f : favs) if (f.GetKey() == k) return true;
     return false;
+}
+std::vector<Favorite> FavoritesManager::All() const {
+    std::lock_guard<std::mutex> lock(mtx);
+    return favs;
 }
 
 // --- HistoryManager ---
@@ -188,11 +207,16 @@ void HistoryManager::Save() {
     WriteFile(file, o.str());
 }
 void HistoryManager::Add(const std::string& book, int bookIdx, int ch, const std::string& t) {
+    std::lock_guard<std::mutex> lock(mtx);
     HistoryEntry e; e.book = book; e.bookIndex = bookIdx; e.chapter = ch; e.translation = t; e.accessedAt = time(nullptr);
     hist.erase(std::remove_if(hist.begin(), hist.end(), [&e](const HistoryEntry& h) { return h.GetKey() == e.GetKey(); }), hist.end());
     hist.insert(hist.begin(), e);
     if ((int)hist.size() > MAX) hist.resize(MAX);
     Save();
+}
+std::vector<HistoryEntry> HistoryManager::All() const {
+    std::lock_guard<std::mutex> lock(mtx);
+    return hist;
 }
 
 // --- SettingsManager ---

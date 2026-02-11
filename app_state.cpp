@@ -17,7 +17,6 @@ AppState::AppState() {
     pageIdx = g_settings.lastPageIdx;
     trans = TRANSLATIONS[transIdx].code; trans2 = TRANSLATIONS[transIdx2].code;
     UpdateColors(); UpdateTitle();
-
     workerThread = std::thread(&AppState::WorkerLoop, this);
 }
 
@@ -30,10 +29,7 @@ AppState::~AppState() {
 void AppState::PushTask(std::function<void()> task, bool clearQueue) {
     {
         std::lock_guard<std::mutex> lock(queueMutex);
-        if (clearQueue) {
-            std::queue<std::function<void()>> empty;
-            std::swap(taskQueue, empty);
-        }
+        if (clearQueue) { std::queue<std::function<void()>> empty; std::swap(taskQueue, empty); }
         taskQueue.push(task);
     }
     queueCondVar.notify_one();
@@ -46,8 +42,7 @@ void AppState::WorkerLoop() {
             std::unique_lock<std::mutex> lock(queueMutex);
             queueCondVar.wait(lock, [this]() { return !taskQueue.empty() || quitWorker; });
             if (quitWorker) break;
-            task = taskQueue.front();
-            taskQueue.pop();
+            task = taskQueue.front(); taskQueue.pop();
         }
         if (task) task();
     }
@@ -57,9 +52,7 @@ void AppState::SaveSettings() {
     g_settings.darkMode = darkMode; g_settings.fontSize = fontSize; g_settings.lineSpacing = lineSpacing;
     g_settings.lastBookIdx = curBookIdx; g_settings.lastChNum = curChNum; g_settings.lastTransIdx = transIdx;
     g_settings.parallelMode = parallelMode; g_settings.transIdx2 = transIdx2; g_settings.bookMode = bookMode;
-    g_settings.lastScrollY = targetScrollY;
-    g_settings.lastPageIdx = pageIdx;
-    g_settings.Save();
+    g_settings.lastScrollY = targetScrollY; g_settings.lastPageIdx = pageIdx; g_settings.Save();
 }
 
 void AppState::UpdateColors() {
@@ -75,18 +68,13 @@ void AppState::UpdateColors() {
 void AppState::ToggleDarkMode() { darkMode = !darkMode; UpdateColors(); SaveSettings(); }
 void AppState::SetStatus(const std::string& msg, float secs) { statusMsg = msg; statusTimer = secs; }
 
-void AppState::InitBuffer() {
+void AppState::InitBuffer(bool resetScroll) {
     isLoading = true;
+    if (resetScroll) { targetScrollY = 0; scrollY = 0; }
     PushTask([this]() {
-        {
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            buf.clear(); buf2.clear();
-        }
-        
-        // Target chapter
+        { std::lock_guard<std::mutex> lock(bufferMutex); buf.clear(); buf2.clear(); }
         Chapter c = LoadOrFetch(curBookIdx, curChNum, trans);
         c.bookIndex = curBookIdx; c.bookAbbrev = BIBLE_BOOKS[curBookIdx].abbrev;
-        
         {
             std::lock_guard<std::mutex> lock(bufferMutex);
             buf.push_back(c);
@@ -98,14 +86,10 @@ void AppState::InitBuffer() {
             bufAnchorBook = curBookIdx; bufAnchorCh = curChNum;
             needsPageRebuild = true;
         }
-        
-        isLoading = false;
-
         if (c.isLoaded) {
             int nb = curBookIdx, nc = curChNum;
             if (NextChapter(nb, nc)) {
-                Chapter n = LoadOrFetch(nb, nc, trans);
-                n.bookIndex = nb; n.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
+                Chapter n = LoadOrFetch(nb, nc, trans); n.bookIndex = nb; n.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
                 {
                     std::lock_guard<std::mutex> lock(bufferMutex);
                     buf.push_back(n);
@@ -120,15 +104,15 @@ void AppState::InitBuffer() {
             g_hist.Add(c.book, curBookIdx, curChNum, trans);
             if (!isNavigating) PushNavPoint(curBookIdx, curChNum);
         }
-    }, true); // Clear queue for jump
+        isLoading = false;
+    }, true);
 }
 
 void AppState::ToggleParallelMode(Font font) {
     parallelMode = !parallelMode;
     if (parallelMode) { trans2 = TRANSLATIONS[transIdx2].code; InitBuffer(); } 
     else { std::lock_guard<std::mutex> lock(bufferMutex); buf2.clear(); needsPageRebuild = true; }
-    targetScrollY = 0; scrollY = 0; 
-    SaveSettings(); UpdateTitle();
+    targetScrollY = 0; scrollY = 0; SaveSettings(); UpdateTitle();
 }
 
 void AppState::GrowBottom() {
@@ -136,27 +120,14 @@ void AppState::GrowBottom() {
     isLoading = true;
     PushTask([this]() {
         int nb, nc;
-        {
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            const Chapter& last = buf.back();
-            nb = last.bookIndex; nc = last.chapter;
-        }
+        { std::lock_guard<std::mutex> lock(bufferMutex); const Chapter& last = buf.back(); nb = last.bookIndex; nc = last.chapter; }
         if (NextChapter(nb, nc)) {
-            Chapter ch = LoadOrFetch(nb, nc, trans);
-            ch.bookIndex = nb; ch.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
+            Chapter ch = LoadOrFetch(nb, nc, trans); ch.bookIndex = nb; ch.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
             {
                 std::lock_guard<std::mutex> lock(bufferMutex);
                 buf.push_back(ch);
-                if (parallelMode) {
-                    Chapter ch2 = LoadOrFetch(nb, nc, trans2);
-                    ch2.bookIndex = nb; ch2.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
-                    buf2.push_back(ch2);
-                }
-                if ((int)buf.size() > BUF_MAX) {
-                    buf.pop_front();
-                    if (parallelMode) buf2.pop_front();
-                    NextChapter(bufAnchorBook, bufAnchorCh);
-                }
+                if (parallelMode) { Chapter ch2 = LoadOrFetch(nb, nc, trans2); ch2.bookIndex = nb; ch2.bookAbbrev = BIBLE_BOOKS[nb].abbrev; buf2.push_back(ch2); }
+                if ((int)buf.size() > BUF_MAX) { buf.pop_front(); if (parallelMode) buf2.pop_front(); NextChapter(bufAnchorBook, bufAnchorCh); }
                 needsPageRebuild = true;
             }
         }
@@ -169,27 +140,15 @@ void AppState::GrowTop() {
     isLoading = true;
     PushTask([this]() {
         int nb, nc;
-        {
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            const Chapter& first = buf.front();
-            nb = first.bookIndex; nc = first.chapter;
-        }
+        { std::lock_guard<std::mutex> lock(bufferMutex); const Chapter& first = buf.front(); nb = first.bookIndex; nc = first.chapter; }
         if (PrevChapter(nb, nc)) {
-            Chapter ch = LoadOrFetch(nb, nc, trans);
-            ch.bookIndex = nb; ch.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
+            Chapter ch = LoadOrFetch(nb, nc, trans); ch.bookIndex = nb; ch.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
             {
                 std::lock_guard<std::mutex> lock(bufferMutex);
                 buf.push_front(ch);
-                if (parallelMode) {
-                    Chapter ch2 = LoadOrFetch(nb, nc, trans2);
-                    ch2.bookIndex = nb; ch2.bookAbbrev = BIBLE_BOOKS[nb].abbrev;
-                    buf2.push_front(ch2);
-                }
+                if (parallelMode) { Chapter ch2 = LoadOrFetch(nb, nc, trans2); ch2.bookIndex = nb; ch2.bookAbbrev = BIBLE_BOOKS[nb].abbrev; buf2.push_front(ch2); }
                 bufAnchorBook = nb; bufAnchorCh = nc;
-                if ((int)buf.size() > BUF_MAX) {
-                    buf.pop_back();
-                    if (parallelMode) buf2.pop_back();
-                }
+                if ((int)buf.size() > BUF_MAX) { buf.pop_back(); if (parallelMode) buf2.pop_back(); }
                 needsPageRebuild = true;
             }
         }
@@ -197,135 +156,47 @@ void AppState::GrowTop() {
     });
 }
 
-void AppState::RebuildPages(Font font) {
-    std::lock_guard<std::mutex> lock(bufferMutex);
-    pages = BuildPages(buf, buf2, parallelMode, font, 700, 500, fontSize, lineSpacing);
-    if (pageIdx >= (int)pages.size()) pageIdx = (int)pages.size() - 1; if (pageIdx < 0) pageIdx = 0; 
-    SaveSettings();
-}
-
-void AppState::BookPageNext(Font font) { 
-    if (pages.empty()) return; 
-    if (pageIdx >= (int)pages.size() - 1) { if (!isLoading) GrowBottom(); } 
-    if (pageIdx < (int)pages.size() - 1) pageIdx++; 
-}
-
+void AppState::RebuildPages(Font font) { std::lock_guard<std::mutex> lock(bufferMutex); pages = BuildPages(buf, buf2, parallelMode, font, 700, 500, fontSize, lineSpacing); if (pageIdx >= (int)pages.size()) pageIdx = (int)pages.size() - 1; if (pageIdx < 0) pageIdx = 0; SaveSettings(); }
+void AppState::BookPageNext(Font font) { if (pages.empty()) return; if (pageIdx >= (int)pages.size() - 1) { if (!isLoading) GrowBottom(); } if (pageIdx < (int)pages.size() - 1) pageIdx++; }
 void AppState::BookPagePrev(Font font) { if (pages.empty()) return; if (pageIdx <= 0) { if (!isLoading) GrowTop(); } else pageIdx--; }
 
-
-
-void AppState::PrevBook() {
-
-    if (curBookIdx > 0) {
-
-        curBookIdx--; curChNum = 1;
-
-        targetScrollY = 0; scrollY = 0; InitBuffer();
-
-        if (bookMode) needsPageRebuild = true;
-
-    }
-
-}
-
-
-
-void AppState::NextBook() {
-
-    if (curBookIdx < (int)BIBLE_BOOKS.size() - 1) {
-
-        curBookIdx++; curChNum = 1;
-
-        targetScrollY = 0; scrollY = 0; InitBuffer();
-
-        if (bookMode) needsPageRebuild = true;
-
-    }
-
-}
-
-
+void AppState::PrevBook() { if (curBookIdx > 0) { curBookIdx--; curChNum = 1; InitBuffer(); } }
+void AppState::NextBook() { if (curBookIdx < (int)BIBLE_BOOKS.size() - 1) { curBookIdx++; curChNum = 1; InitBuffer(); } }
 
 void AppState::ForceRefresh(Font font) {
     std::string p = "cache/" + trans + "/" + BIBLE_BOOKS[curBookIdx].abbrev + "/" + std::to_string(curChNum) + ".json";
-    remove(p.c_str()); InitBuffer(); SetStatus("Passage refreshed from API.");
+    remove(p.c_str()); InitBuffer(); SetStatus("Passage refreshed.");
+}
+
+void AppState::CopyChapter() {
+    std::lock_guard<std::mutex> lock(bufferMutex); if (buf.empty() || !buf[0].isLoaded) return;
+    std::string fullText = buf[0].book + " (" + buf[0].translation + ")\n\n";
+    for (const auto& v : buf[0].verses) fullText += std::to_string(v.number) + " " + v.text + "\n";
+    CopyToClipboard(fullText); SetStatus("Chapter copied!");
 }
 
 void AppState::UpdateTitle() {
     std::lock_guard<std::mutex> lock(bufferMutex);
-    if (!buf.empty() && buf[0].isLoaded) { 
-        std::string t = "RayBible - " + buf[0].book; 
-        if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; 
-        SetWindowTitle(t.c_str()); 
-    }
+    if (!buf.empty() && buf[0].isLoaded) { std::string t = "RayBible - " + buf[0].book; if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; SetWindowTitle(t.c_str()); }
     else SetWindowTitle("RayBible");
 }
 
 void AppState::PushNavPoint(int b, int c) {
     if (navIndex >= 0 && navHistory[navIndex].bookIdx == b && navHistory[navIndex].chNum == c) return;
-    
-    // Clear future history if we were in the middle
-    if (navIndex < (int)navHistory.size() - 1) {
-        navHistory.erase(navHistory.begin() + navIndex + 1, navHistory.end());
-    }
-    
-    navHistory.push_back({b, c});
-    navIndex = (int)navHistory.size() - 1;
-    if (navHistory.size() > 50) {
-        navHistory.erase(navHistory.begin());
-        navIndex--;
-    }
+    if (navIndex < (int)navHistory.size() - 1) navHistory.erase(navHistory.begin() + navIndex + 1, navHistory.end());
+    navHistory.push_back({b, c}); navIndex = (int)navHistory.size() - 1;
+    if (navHistory.size() > 50) { navHistory.erase(navHistory.begin()); navIndex--; }
 }
 
-void AppState::GoBack() {
-    if (navIndex > 0) {
-        navIndex--;
-        isNavigating = true;
-        curBookIdx = navHistory[navIndex].bookIdx;
-        curChNum = navHistory[navIndex].chNum;
-        InitBuffer();
-        isNavigating = false;
-    }
-}
+void AppState::GoBack() { if (navIndex > 0) { navIndex--; isNavigating = true; curBookIdx = navHistory[navIndex].bookIdx; curChNum = navHistory[navIndex].chNum; InitBuffer(); isNavigating = false; } }
+void AppState::GoForward() { if (navIndex < (int)navHistory.size() - 1) { navIndex++; isNavigating = true; curBookIdx = navHistory[navIndex].bookIdx; curChNum = navHistory[navIndex].chNum; InitBuffer(); isNavigating = false; } }
 
-void AppState::GoForward() {
-    if (navIndex < (int)navHistory.size() - 1) {
-        navIndex++;
-        isNavigating = true;
-        curBookIdx = navHistory[navIndex].bookIdx;
-        curChNum = navHistory[navIndex].chNum;
-        InitBuffer();
-        isNavigating = false;
-    }
-}
-
-void AppState::PrevSequential() {
-    int b = curBookIdx, c = curChNum;
-    if (PrevChapter(b, c)) {
-        curBookIdx = b; curChNum = c;
-        targetScrollY = 0; scrollY = 0;
-        InitBuffer();
-        if (bookMode) needsPageRebuild = true;
-    }
-}
-
-void AppState::NextSequential() {
-    int b = curBookIdx, c = curChNum;
-    if (NextChapter(b, c)) {
-        curBookIdx = b; curChNum = c;
-        targetScrollY = 0; scrollY = 0;
-        InitBuffer();
-        if (bookMode) needsPageRebuild = true;
-    }
-}
+void AppState::PrevSequential() { int b = curBookIdx, c = curChNum; if (PrevChapter(b, c)) { curBookIdx = b; curChNum = c; InitBuffer(); } }
+void AppState::NextSequential() { int b = curBookIdx, c = curChNum; if (NextChapter(b, c)) { curBookIdx = b; curChNum = c; InitBuffer(); } }
 
 void AppState::StartGlobalSearch() {
-    gSearchResults.clear();
-    gSearchActive = true;
-    gSearchProgress = 0;
-    std::string query = ToLower(gSearchBuf);
-    std::string currentTrans = trans;
-    
+    gSearchResults.clear(); gSearchActive = true; gSearchProgress = 0;
+    std::string query = ToLower(gSearchBuf); std::string currentTrans = trans;
     PushTask([this, query, currentTrans]() {
         for (int b = 0; b < (int)BIBLE_BOOKS.size(); b++) {
             if (quitWorker || !gSearchActive) break;
@@ -333,12 +204,7 @@ void AppState::StartGlobalSearch() {
             for (int c = 1; c <= BIBLE_BOOKS[b].chapters; c++) {
                 if (g_cache.Has(currentTrans, ba, c)) {
                     Chapter ch = g_cache.Load(currentTrans, ba, c);
-                    for (const auto& v : ch.verses) {
-                        if (ToLower(v.text).find(query) != std::string::npos) {
-                            std::lock_guard<std::mutex> lock(bufferMutex);
-                            gSearchResults.push_back({b, c, v.number, BIBLE_BOOKS[b].name, v.text});
-                        }
-                    }
+                    for (const auto& v : ch.verses) if (ToLower(v.text).find(query) != std::string::npos) { std::lock_guard<std::mutex> lock(bufferMutex); gSearchResults.push_back({b, c, v.number, BIBLE_BOOKS[b].name, v.text}); }
                 }
             }
             gSearchProgress = b + 1;
@@ -347,10 +213,5 @@ void AppState::StartGlobalSearch() {
     });
 }
 
-void AppState::UpdateGlobalSearch() {
-    // Logic moved to background thread, nothing to do here except progress UI if needed
-}
-
-void AppState::Update() {
-    // Any main-thread logic that needs to run every frame
-}
+void AppState::UpdateGlobalSearch() {}
+void AppState::Update() {}

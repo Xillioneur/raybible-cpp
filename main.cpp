@@ -6,6 +6,7 @@
 #include "managers.h"
 #include "bible_logic.h"
 #include <cstring>
+#include <cmath>
 
 int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
@@ -15,18 +16,18 @@ int main() {
     Font font = GetFontDefault();
 #ifdef __APPLE__
     const char* fontPath = "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
-    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 3000);
+    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 10000);
 #elif defined(_WIN32)
     const char* fontPath = "C:\\Windows\\Fonts\\times.ttf";
-    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 3000);
+    if (FileExists(fontPath)) font = LoadFontEx(fontPath, 64, 0, 10000);
 #else
     const char* paths[] = { "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf", "/usr/share/fonts/TTF/Times.TTF", "/usr/share/fonts/truetype/freefont/FreeSerif.ttf" };
-    for (const char* p : paths) { if (FileExists(p)) { font = LoadFontEx(p, 64, 0, 3000); break; } }
+    for (const char* p : paths) { if (FileExists(p)) { font = LoadFontEx(p, 64, 0, 10000); break; } }
 #endif
     SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
 
     AppState state;
-    state.InitBuffer();
+    state.InitBuffer(false);
 
     float saveTimer = 1.0f;
 
@@ -65,7 +66,7 @@ int main() {
         if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
 
         if (IsKeyPressed(KEY_ESCAPE)) {
-            state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = state.showBurgerMenu = false;
+            state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = state.showBurgerMenu = state.showNoteEditor = false;
             memset(state.searchBuf, 0, sizeof(state.searchBuf)); memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); memset(state.gSearchBuf, 0, sizeof(state.gSearchBuf));
         }
 
@@ -77,6 +78,15 @@ int main() {
         if (state.showJump) {
             int k = GetCharPressed(); while (k > 0) { size_t len = strlen(state.jumpBuf); if (k >= 32 && k <= 126 && len < 126) { state.jumpBuf[len] = (char)k; state.jumpBuf[len + 1] = 0; } k = GetCharPressed(); }
             if (IsKeyPressed(KEY_BACKSPACE)) { size_t len = strlen(state.jumpBuf); if (len > 0) state.jumpBuf[len - 1] = 0; }
+            if (IsKeyPressed(KEY_ENTER)) {
+                int nb, nc, nv;
+                if (ParseReference(state.jumpBuf, nb, nc, nv)) {
+                    state.curBookIdx = nb; state.curChNum = nc;
+                    state.targetScrollY = 0; state.scrollY = 0; state.scrollToVerse = nv;
+                    state.InitBuffer();
+                    state.showJump = false; memset(state.jumpBuf, 0, sizeof(state.jumpBuf));
+                }
+            }
         }
 
         if (!state.showSearch && !state.showGlobalSearch && !state.showJump) {
@@ -98,19 +108,16 @@ int main() {
 
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             Vector2 mp = GetMousePosition();
-            if (state.showBookDrop && !CheckCollisionPointRec(mp, {240, 60, 200, 400})) state.showBookDrop = false;
-            if (state.showTransDrop && !CheckCollisionPointRec(mp, {540, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop = false;
-            if (state.showTransDrop2 && !CheckCollisionPointRec(mp, {626, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop2 = false;
+            if (state.showBookDrop && !CheckCollisionPointRec(mp, {310, 60, 200, 400})) state.showBookDrop = false;
+            if (state.showTransDrop && !CheckCollisionPointRec(mp, {610, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop = false;
+            if (state.showTransDrop2 && !CheckCollisionPointRec(mp, {696, 60, 148, (float)(TRANSLATIONS.size() * 36)})) state.showTransDrop2 = false;
         }
 
         BeginDrawing();
         ClearBackground(state.bg);
-        
         if (state.bookMode) DrawBookMode(state, font); else DrawScrollMode(state, font);
         DrawFooter(state, font);
-        
         DrawHeader(state, font);
-
         if (state.showSearch) DrawSearchPanel(state, font);
         if (state.showGlobalSearch) DrawGlobalSearchPanel(state, font);
         if (state.showJump) DrawJumpPanel(state, font);
@@ -119,10 +126,8 @@ int main() {
         if (state.showCache) DrawCachePanel(state, font);
         if (state.showPlan) DrawPlanPanel(state, font);
         if (state.showHelp) DrawHelpPanel(state, font);
-        if (state.showBurgerMenu) {
-            extern void DrawBurgerMenu(AppState& s, Font f);
-            DrawBurgerMenu(state, font);
-        }
+        if (state.showBurgerMenu) DrawBurgerMenu(state, font);
+        if (state.showNoteEditor) DrawNoteEditor(state, font);
         DrawTooltip(state, font);
         EndDrawing();
     }

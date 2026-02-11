@@ -16,7 +16,12 @@ Chapter FetchFromAPI(int bookIdx, int chNum, const std::string& trans) {
 
     std::string url = "https://bible-api.com/" + BIBLE_BOOKS[bookIdx].abbrev + "+" + std::to_string(chNum) + "?translation=" + trans;
     std::string resp = HttpGet(url);
-    if (resp.empty()) return r;
+    if (resp.empty()) {
+        r.book = BIBLE_BOOKS[bookIdx].name + " " + std::to_string(chNum);
+        r.verses.push_back({1, "Error loading content. Please check internet connection."});
+        r.isLoaded = true; // Mark as loaded so UI renders the error
+        return r;
+    }
 
     r.book = JStr(resp, "reference");
     for (const auto& vo : JArr(resp, "verses")) {

@@ -75,6 +75,7 @@ struct AppState {
     float scrollY = 0.0f;
     float targetScrollY = 0.0f;
     int   scrollToVerse = -1;
+    int   scrollChapterIdx = 0; // Tracks which buffered chapter is visible
 
     // --- Parallel mode ---
     bool parallelMode = false;
@@ -103,7 +104,10 @@ struct AppState {
     bool showJump      = false;
     bool showPlan      = false;
     bool showBurgerMenu = false;
+    bool showNoteEditor = false;
     char jumpBuf[128]{};
+    char noteBuf[512]{};
+    std::string selectedFavoriteKey;
     CacheStats cacheStats{};
 
     // --- Dropdowns ---
@@ -125,7 +129,7 @@ struct AppState {
     void UpdateColors();
     void ToggleDarkMode();
     void SetStatus(const std::string& msg, float secs = 2.5f);
-    void InitBuffer();
+    void InitBuffer(bool resetScroll = true);
     void ToggleParallelMode(Font font);
     void GrowBottom();
     void GrowTop();
@@ -135,6 +139,7 @@ struct AppState {
     void PrevBook();
     void NextBook();
     void ForceRefresh(Font font);
+    void CopyChapter();
     void UpdateTitle();
     void GoBack();
     void GoForward();
