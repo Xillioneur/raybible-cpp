@@ -70,7 +70,7 @@ void AppState::SetStatus(const std::string& msg, float secs) { statusMsg = msg; 
 
 void AppState::InitBuffer(bool resetScroll) {
     isLoading = true;
-    if (resetScroll) { targetScrollY = 0; scrollY = 0; }
+    if (resetScroll) { targetScrollY = 0; scrollY = 0; scrollChapterIdx = 0; }
     PushTask([this]() {
         { std::lock_guard<std::mutex> lock(bufferMutex); buf.clear(); buf2.clear(); }
         Chapter c = LoadOrFetch(curBookIdx, curChNum, trans);
@@ -156,7 +156,15 @@ void AppState::GrowTop() {
     });
 }
 
-void AppState::RebuildPages(Font font) { std::lock_guard<std::mutex> lock(bufferMutex); pages = BuildPages(buf, buf2, parallelMode, font, 700, 500, fontSize, lineSpacing); if (pageIdx >= (int)pages.size()) pageIdx = (int)pages.size() - 1; if (pageIdx < 0) pageIdx = 0; SaveSettings(); }
+void AppState::RebuildPages(Font font) { 
+    std::lock_guard<std::mutex> lock(bufferMutex); 
+    if (buf.empty()) return;
+    pages = BuildPages(buf, buf2, parallelMode, font, 700, 500, fontSize, lineSpacing); 
+    if (pageIdx >= (int)pages.size()) pageIdx = (int)pages.size() - 1; 
+    if (pageIdx < 0) pageIdx = 0; 
+    SaveSettings(); 
+}
+
 void AppState::BookPageNext(Font font) { if (pages.empty()) return; if (pageIdx >= (int)pages.size() - 1) { if (!isLoading) GrowBottom(); } if (pageIdx < (int)pages.size() - 1) pageIdx++; }
 void AppState::BookPagePrev(Font font) { if (pages.empty()) return; if (pageIdx <= 0) { if (!isLoading) GrowTop(); } else pageIdx--; }
 
@@ -177,7 +185,12 @@ void AppState::CopyChapter() {
 
 void AppState::UpdateTitle() {
     std::lock_guard<std::mutex> lock(bufferMutex);
-    if (!buf.empty() && buf[0].isLoaded) { std::string t = "RayBible - " + buf[0].book; if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; SetWindowTitle(t.c_str()); }
+    int ci = bookMode ? 0 : scrollChapterIdx;
+    if (ci < (int)buf.size() && buf[ci].isLoaded) { 
+        std::string t = "RayBible - " + buf[ci].book; 
+        if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; 
+        SetWindowTitle(t.c_str()); 
+    }
     else SetWindowTitle("RayBible");
 }
 
@@ -214,4 +227,4 @@ void AppState::StartGlobalSearch() {
 }
 
 void AppState::UpdateGlobalSearch() {}
-void AppState::Update() {}
+void AppState::Update() { UpdateTitle(); }

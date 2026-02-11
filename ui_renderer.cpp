@@ -426,20 +426,39 @@ void DrawScrollMode(AppState& s, Font f) {
 
     if (s.parallelMode) {
         float colW = (GetScreenWidth() - PAD * 3) / 2.0f, y1 = TOP + 18 + s.scrollY, y2 = TOP + 18 + s.scrollY;
-        for (int ci = 0; ci < (int)s.buf.size(); ci++) {
-            const Chapter& ch = s.buf[ci]; if (!ch.isLoaded) continue;
-            if (y1 <= TOP + 50 && y1 + 100 > TOP) s.scrollChapterIdx = ci;
+        
+        // Use the count of the primary buffer
+        int chapterCount = (int)s.buf.size();
+        
+        for (int ci = 0; ci < chapterCount; ci++) {
+            const Chapter& ch1 = s.buf[ci];
             float chapterStartY = y1;
-            DrawTextEx(f, ch.book.c_str(), {PAD, y1}, 24, 1, s.accent); DrawTextEx(f, ch.translation.c_str(), {PAD + colW - 40, y1 + 6}, 12, 1, s.vnum); y1 += 34; DrawLineEx({PAD, y1}, {PAD + colW, y1}, 2, s.vnum); y1 += 14;
-            for (const auto& v : ch.verses) { bool isFav = g_favs.Has(ch.book, ch.chapter, v.number, ch.translation); if (isFav) DrawRectangleRec({PAD - 5, y1 - 2, colW + 10, FS + LS + 4}, {s.vnum.r, s.vnum.g, s.vnum.b, 25}); if (s.scrollToVerse == v.number && ci == 0) { s.targetScrollY = -(y1 - s.scrollY - TOP - 20); s.scrollToVerse = -1; } Rectangle vRec = {PAD, y1, colW, FS + 4}; bool vHov = CheckCollisionPointRec(GetMousePosition(), vRec); DrawVerseText(f, v, PAD, y1, colW, FS, LS, VG, s.text, s.vnum, isFav, vHov, {}, {220, 180, 60, 120}); if (vHov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { if (GetMouseX() < PAD + 40) { if (isFav) g_favs.Remove(ch.book, ch.chapter, v.number, ch.translation); else g_favs.Add(ch.book, ch.chapter, v.number, ch.translation, v.text); } } if (vHov && IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) { std::string quote = "\"" + v.text + "\"\n\xE2\x80\x94 " + ch.book + ":" + std::to_string(v.number) + " (" + ch.translation + ")"; CopyToClipboard(quote); SaveVerseImage(v, ch.book, ch.translation, f); s.SetStatus("Verse copied & Image saved!"); } }
+            
+            // Draw left column
+            if (ch1.isLoaded) {
+                if (y1 <= TOP + 50 && y1 + 100 > TOP) s.scrollChapterIdx = ci;
+                DrawTextEx(f, ch1.book.c_str(), {PAD, y1}, 24, 1, s.accent); DrawTextEx(f, ch1.translation.c_str(), {PAD + colW - 40, y1 + 6}, 12, 1, s.vnum); y1 += 34; DrawLineEx({PAD, y1}, {PAD + colW, y1}, 2, s.vnum); y1 += 14;
+                for (const auto& v : ch1.verses) { bool isFav = g_favs.Has(ch1.book, ch1.chapter, v.number, ch1.translation); if (isFav) DrawRectangleRec({PAD - 5, y1 - 2, colW + 10, FS + LS + 4}, {s.vnum.r, s.vnum.g, s.vnum.b, 25}); if (s.scrollToVerse == v.number && ci == 0) { s.targetScrollY = -(y1 - s.scrollY - TOP - 20); s.scrollToVerse = -1; } Rectangle vRec = {PAD, y1, colW, FS + 4}; bool vHov = CheckCollisionPointRec(GetMousePosition(), vRec); DrawVerseText(f, v, PAD, y1, colW, FS, LS, VG, s.text, s.vnum, isFav, vHov, {}, {220, 180, 60, 120}); if (vHov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { if (GetMouseX() < PAD + 40) { if (isFav) g_favs.Remove(ch1.book, ch1.chapter, v.number, ch1.translation); else g_favs.Add(ch1.book, ch1.chapter, v.number, ch1.translation, v.text); } } if (vHov && IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) { std::string q = "\"" + v.text + "\"\n\xE2\x80\x94 " + ch1.book + ":" + std::to_string(v.number) + " (" + ch1.translation + ")"; CopyToClipboard(q); SaveVerseImage(v, ch1.book, ch1.translation, f); s.SetStatus("Verse copied!"); } }
+            } else {
+                DrawTextEx(f, "Loading...", {PAD, y1}, 18, 1, s.vnum);
+                y1 += 50;
+            }
             
             float leftEndY = y1; y2 = chapterStartY;
+            
+            // Draw right column
             if (ci < (int)s.buf2.size()) {
                 const Chapter& ch2 = s.buf2[ci];
                 if (ch2.isLoaded) {
                     DrawTextEx(f, ch2.book.c_str(), {PAD * 2 + colW, y2}, 24, 1, s.accent); DrawTextEx(f, ch2.translation.c_str(), {PAD * 2 + colW * 2 - 40, y2 + 6}, 12, 1, s.vnum); y2 += 34; DrawLineEx({PAD * 2 + colW, y2}, {PAD * 2 + colW * 2, y2}, 2, s.vnum); y2 += 14; 
                     for (const auto& v : ch2.verses) { DrawVerseText(f, v, PAD * 2 + colW, y2, colW, FS, LS, VG, s.text, s.vnum, false, false, {}, {220, 180, 60, 120}); }
+                } else {
+                    DrawTextEx(f, "Loading...", {PAD * 2 + colW, y2}, 18, 1, s.vnum);
+                    y2 += 50;
                 }
+            } else {
+                DrawTextEx(f, "Connecting...", {PAD * 2 + colW, y2}, 18, 1, s.vnum);
+                y2 += 50;
             }
             y1 = y2 = std::max(leftEndY, y2) + 40;
         }
@@ -460,6 +479,7 @@ void DrawScrollMode(AppState& s, Font f) {
     if (drawFloatNav({ 5, ay, 40, 50 }, "<", !(s.curBookIdx == 0 && s.curChNum == 1))) { PrevChapter(s.curBookIdx, s.curChNum); s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; }
     if (drawFloatNav({ (float)GetScreenWidth() - 45, ay, 40, 50 }, ">", true)) { NextChapter(s.curBookIdx, s.curChNum); s.targetScrollY = 0; s.scrollY = 0; s.InitBuffer(); if (s.bookMode) s.needsPageRebuild = true; }
     float totalH = yFinal - TOP - s.scrollY; float maxUp = -(totalH - h + 60); if (s.targetScrollY > 60) s.targetScrollY = 60; 
+    if (maxUp > 0) maxUp = 0;
     if (!s.isLoading && s.targetScrollY < maxUp) s.targetScrollY = maxUp;
     if (!s.isLoading) { if (s.targetScrollY > 20) s.GrowTop(); if (s.targetScrollY < maxUp + 220) s.GrowBottom(); }
 }

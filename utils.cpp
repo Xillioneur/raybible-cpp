@@ -69,13 +69,34 @@ std::string ToLower(const std::string& s) {
     return r;
 }
 
+static size_t SkipWS(const std::string& s, size_t p) {
+    while (p < s.size() && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n' || s[p] == '\r')) p++;
+    return p;
+}
+
+static size_t FindKey(const std::string& j, const std::string& k) {
+    std::string sk = "\"" + k + "\"";
+    size_t p = 0;
+    while ((p = j.find(sk, p)) != std::string::npos) {
+        size_t next = SkipWS(j, p + sk.size());
+        if (next < j.size() && j[next] == ':') return next + 1;
+        p += sk.size();
+    }
+    return std::string::npos;
+}
+
 std::string JStr(const std::string& j, const std::string& k) {
-    std::string sk = "\"" + k + "\":\"";
-    size_t p = j.find(sk);
+    size_t p = FindKey(j, k);
     if (p == std::string::npos) return "";
-    p += sk.size();
-    size_t e = j.find("\"", p);
-    if (e == std::string::npos) return "";
+    p = SkipWS(j, p);
+    if (p >= j.size() || j[p] != '\"') return "";
+    p++;
+    size_t e = p;
+    while (e < j.size()) {
+        if (j[e] == '\"' && j[e-1] != '\\') break;
+        e++;
+    }
+    if (e >= j.size()) return "";
     std::string r = j.substr(p, e - p);
     size_t pos = 0;
     while ((pos = r.find("\\n", pos)) != std::string::npos) { r.replace(pos, 2, " "); pos += 1; }
@@ -83,44 +104,71 @@ std::string JStr(const std::string& j, const std::string& k) {
     while ((pos = r.find("\\\"", pos)) != std::string::npos) { r.replace(pos, 2, "\""); pos += 1; }
     return r;
 }
+
 int JInt(const std::string& j, const std::string& k) {
-    std::string sk = "\"" + k + "\":";
-    size_t p = j.find(sk);
+    size_t p = FindKey(j, k);
     if (p == std::string::npos) return 0;
-    p += sk.size();
-    size_t e = j.find_first_of(",}", p);
+    p = SkipWS(j, p);
+    size_t e = j.find_first_of(",}] \t\n\r", p);
     if (e == std::string::npos) return 0;
     try { return std::stoi(j.substr(p, e - p)); } catch (...) { return 0; }
 }
+
 long JLong(const std::string& j, const std::string& k) {
-    std::string sk = "\"" + k + "\":";
-    size_t p = j.find(sk);
+    size_t p = FindKey(j, k);
     if (p == std::string::npos) return 0;
-    p += sk.size();
-    size_t e = j.find_first_of(",}", p);
+    p = SkipWS(j, p);
+    size_t e = j.find_first_of(",}] \t\n\r", p);
     if (e == std::string::npos) return 0;
     try { return std::stol(j.substr(p, e - p)); } catch (...) { return 0; }
 }
+
 std::vector<std::string> JArr(const std::string& j, const std::string& k) {
     std::vector<std::string> r;
-    std::string sk = "\"" + k + "\":[";
-    size_t p = j.find(sk);
+    size_t p = FindKey(j, k);
     if (p == std::string::npos) return r;
-    p += sk.size();
+    p = SkipWS(j, p);
+    if (p >= j.size() || j[p] != '[') return r;
+    p++;
+    
     int depth = 1;
     size_t e = p;
+    bool inStr = false;
     while (e < j.size() && depth > 0) {
-        if (j[e] == '[') depth++;
-        else if (j[e] == ']') depth--;
+        if (j[e] == '\"' && (e == 0 || j[e-1] != '\\')) inStr = !inStr;
+        if (!inStr) {
+            if (j[e] == '[') depth++;
+            else if (j[e] == ']') depth--;
+        }
         if (depth > 0) e++;
     }
     if (e >= j.size()) return r;
     std::string a = j.substr(p, e - p);
-    for (size_t s = 0; (s = a.find("{", s)) != std::string::npos;) {
-        size_t en = a.find("}", s);
-        if (en == std::string::npos) break;
-        r.push_back(a.substr(s, en - s + 1));
-        s = en + 1;
+
+    size_t s = 0;
+    while (s < a.size()) {
+        size_t start = a.find('{', s);
+        if (start == std::string::npos) break;
+        
+        int objDepth = 0;
+        size_t cur = start;
+        bool objInStr = false;
+        while (cur < a.size()) {
+            if (a[cur] == '\"' && (cur == 0 || a[cur-1] != '\\')) objInStr = !objInStr;
+            if (!objInStr) {
+                if (a[cur] == '{') objDepth++;
+                else if (a[cur] == '}') {
+                    objDepth--;
+                    if (objDepth == 0) break;
+                }
+            }
+            cur++;
+        }
+        
+        if (cur < a.size()) {
+            r.push_back(a.substr(start, cur - start + 1));
+            s = cur + 1;
+        } else break;
     }
     return r;
 }

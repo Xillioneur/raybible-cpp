@@ -41,6 +41,8 @@ int main() {
             saveTimer = 1.0f;
         }
 
+        state.Update();
+
         state.scrollY += (state.targetScrollY - state.scrollY) * 12.0f * dt;
         if (std::abs(state.targetScrollY - state.scrollY) < 0.5f) state.scrollY = state.targetScrollY;
 
