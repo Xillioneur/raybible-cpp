@@ -12,6 +12,6 @@ bool NextChapter(int& bookIdx, int& chNum);
 bool PrevChapter(int& bookIdx, int& chNum);
 bool ParseReference(std::string input, int& bookIdx, int& chNum, int& vNum);
 std::vector<std::pair<int, int>> GetDailyReading(int dayOfYear);
-std::vector<SearchMatch> SearchVerses(const std::vector<Verse>& verses, const std::string& q, bool cs);
+std::vector<SearchMatch> SearchVerses(const std::deque<Chapter>& chapters, const std::string& q, bool cs);
 
 #endif // BIBLE_LOGIC_H

@@ -55,17 +55,19 @@ int main() {
 
         bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) || IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
 
-        if (ctrl && IsKeyPressed(KEY_D)) state.ToggleDarkMode();
-        if (ctrl && IsKeyPressed(KEY_H)) state.showHistory = !state.showHistory;
-        if (ctrl && IsKeyPressed(KEY_R)) state.ForceRefresh(font);
-        if (ctrl && IsKeyPressed(KEY_G)) state.showGlobalSearch = !state.showGlobalSearch;
-        if (ctrl && IsKeyPressed(KEY_P)) state.showPlan = !state.showPlan;
-        if (ctrl && IsKeyPressed(KEY_S)) { state.showCache = !state.showCache; if (state.showCache) state.cacheStats = g_cache.Stats(); }
-        if (ctrl && IsKeyPressed(KEY_B)) { state.bookMode = !state.bookMode; if (state.bookMode) state.needsPageRebuild = true; state.SaveSettings(); }
-        
-        if (ctrl && IsKeyPressed(KEY_F)) { state.showSearch = !state.showSearch; if (!state.showSearch) { memset(state.searchBuf, 0, sizeof(state.searchBuf)); state.searchResults.clear(); } }
-        if (ctrl && IsKeyPressed(KEY_J)) { state.showJump = !state.showJump; if (!state.showJump) memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); }
-        if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
+        if (!state.InputActive()) {
+            if (ctrl && IsKeyPressed(KEY_D)) state.ToggleDarkMode();
+            if (ctrl && IsKeyPressed(KEY_H)) state.showHistory = !state.showHistory;
+            if (ctrl && IsKeyPressed(KEY_R)) state.ForceRefresh(font);
+            if (ctrl && IsKeyPressed(KEY_G)) state.showGlobalSearch = !state.showGlobalSearch;
+            if (ctrl && IsKeyPressed(KEY_P)) state.showPlan = !state.showPlan;
+            if (ctrl && IsKeyPressed(KEY_S)) { state.showCache = !state.showCache; if (state.showCache) state.cacheStats = g_cache.Stats(); }
+            if (ctrl && IsKeyPressed(KEY_B)) { state.bookMode = !state.bookMode; if (state.bookMode) state.needsPageRebuild = true; state.SaveSettings(); }
+            
+            if (ctrl && IsKeyPressed(KEY_F)) { state.showSearch = !state.showSearch; if (!state.showSearch) { memset(state.searchBuf, 0, sizeof(state.searchBuf)); state.searchResults.clear(); } }
+            if (ctrl && IsKeyPressed(KEY_J)) { state.showJump = !state.showJump; if (!state.showJump) memset(state.jumpBuf, 0, sizeof(state.jumpBuf)); }
+            if (IsKeyPressed(KEY_F1)) state.showHelp = !state.showHelp;
+        }
 
         if (IsKeyPressed(KEY_ESCAPE)) {
             state.showSearch = state.showGlobalSearch = state.showJump = state.showHelp = state.showPlan = state.showHistory = state.showFavorites = state.showCache = state.showBookDrop = state.showTransDrop = state.showTransDrop2 = state.gSearchActive = state.showBurgerMenu = state.showNoteEditor = false;
@@ -98,7 +100,7 @@ int main() {
         if (state.showSearch) {
             int k = GetCharPressed(); while (k > 0) { size_t len = strlen(state.searchBuf); if (k >= 32 && k <= 126 && len < 254) { state.searchBuf[len] = (char)k; state.searchBuf[len + 1] = 0; } k = GetCharPressed(); }
             if (IsKeyPressed(KEY_BACKSPACE)) { size_t len = strlen(state.searchBuf); if (len > 0) state.searchBuf[len - 1] = 0; }
-            if (strlen(state.searchBuf) > 0) { std::vector<Verse> all; for (const auto& ch : state.buf) for (const auto& v : ch.verses) all.push_back(v); state.searchResults = SearchVerses(all, state.searchBuf, state.searchCS); }
+            if (strlen(state.searchBuf) > 0) { state.searchResults = SearchVerses(state.buf, state.searchBuf, state.searchCS); }
             else state.searchResults.clear();
         }
 

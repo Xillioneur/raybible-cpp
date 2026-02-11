@@ -45,6 +45,8 @@ struct Translation {
 struct Page {
     std::vector<std::string> lines;
     std::vector<std::string> lines2;
+    std::vector<int> lineVerses;  // Verse number for each line in 'lines'
+    std::vector<int> lineVerses2; // Verse number for each line in 'lines2'
     int startVerse;
     int endVerse;
     int chapterBufIndex;
@@ -81,6 +83,8 @@ struct HistoryEntry {
 };
 
 struct SearchMatch {
+    int bookIndex;
+    int chapter;
     int verseNumber;
     std::string text;
     size_t matchPos;

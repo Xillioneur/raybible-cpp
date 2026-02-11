@@ -149,6 +149,7 @@ struct AppState {
     void StartGlobalSearch();
     void UpdateGlobalSearch();
     void Update(); // Main thread update
+    bool InputActive() const { return showSearch || showJump || showGlobalSearch || showNoteEditor; }
 };
 
 #endif // APP_STATE_H

@@ -126,15 +126,18 @@ std::vector<std::pair<int, int>> GetDailyReading(int dayOfYear) {
     return r;
 }
 
-std::vector<SearchMatch> SearchVerses(const std::vector<Verse>& verses, const std::string& q, bool cs) {
+std::vector<SearchMatch> SearchVerses(const std::deque<Chapter>& chapters, const std::string& q, bool cs) {
     std::vector<SearchMatch> m;
+    if (q.empty()) return m;
     std::string sq = cs ? q : ToLower(q);
-    for (const auto& v : verses) {
-        std::string st = cs ? v.text : ToLower(v.text);
-        size_t p = 0;
-        while ((p = st.find(sq, p)) != std::string::npos) {
-            m.push_back({v.number, v.text, p, q.size()});
-            p += q.size();
+    for (const auto& ch : chapters) {
+        for (const auto& v : ch.verses) {
+            std::string st = cs ? v.text : ToLower(v.text);
+            size_t p = 0;
+            while ((p = st.find(sq, p)) != std::string::npos) {
+                m.push_back({ch.bookIndex, ch.chapter, v.number, v.text, p, sq.size()});
+                p += sq.size();
+            }
         }
     }
     return m;
