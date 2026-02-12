@@ -252,13 +252,76 @@ void DrawHistoryPanel(AppState& s, Font f) {
 }
 
 void DrawFavoritesPanel(AppState& s, Font f) {
-    float pw = 520, ph = 560, px = ((float)GetScreenWidth() - pw) / 2.f, py = 60;
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), {0, 0, 0, 180}); DrawRectangle(px, py, pw, ph, s.hdr); DrawRectangleLinesEx({px, py, pw, ph}, 2, s.vnum); DrawTextEx(f, "Study Collection", {px + 20, py + 20}, 24, 1, s.accent); float y = py + 65; const auto& all = g_study.All();
-    if (all.empty()) { DrawTextEx(f, "No study data yet.", {px + 20, y}, 18, 1, s.vnum); } else {
-        for (int i = 0; i < (int)all.size() && i < 10; i++) { const auto& vd = all[i]; std::string lbl = vd.GetDisplay(); std::string prev = vd.text.empty() ? "" : (vd.text.size() > 55 ? vd.text.substr(0, 52) + "..." : vd.text);
-            Rectangle r = {px + 20, y, pw - 40, 44}; bool hov = CheckCollisionPointRec(GetMousePosition(), r); if (hov) DrawRectangleRec(r, {s.accent.r, s.accent.g, s.accent.b, 60}); if (vd.highlightColor > 0) { Color hcs[] = {BLANK, YELLOW, GREEN, SKYBLUE, PINK}; DrawRectangle(r.x, r.y, 4, r.height, hcs[vd.highlightColor]); } DrawTextEx(f, lbl.c_str(), {r.x + 10, r.y + 4}, 16, 1, s.vnum); DrawTextEx(f, prev.c_str(), {r.x + 10, r.y + 24}, 14, 1, s.text);
-            if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { for (int j = 0; j < (int)BIBLE_BOOKS.size(); j++) if (vd.book.find(BIBLE_BOOKS[j].name) != std::string::npos) { s.curBookIdx = j; break; } s.curChNum = vd.chapter; s.trans = vd.translation; for (int j = 0; j < (int)TRANSLATIONS.size(); j++) if (TRANSLATIONS[j].code == vd.translation) { s.transIdx = j; break; } s.targetScrollY = 0; s.scrollY = 0; s.lastSelectedVerse = vd.verse; s.InitBuffer(); s.showFavorites = false; } y += 48; } }
-    Rectangle cb = {px + pw - 120, py + ph - 50, 100, 34}; bool ch = CheckCollisionPointRec(GetMousePosition(), cb); DrawRectangleRec(cb, ch ? s.accent : s.bg); DrawRectangleLinesEx(cb, 1, s.vnum); DrawTextEx(f, "Close", {cb.x + 28, cb.y + 8}, 18, 1, ch ? RAYWHITE : s.text); if (ch && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) s.showFavorites = false;
+    float pw = 650, ph = 600, px = ((float)GetScreenWidth() - pw) / 2.f, py = 60;
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), {0, 0, 0, 180}); DrawRectangle(px, py, pw, ph, s.hdr); DrawRectangleLinesEx({px, py, pw, ph}, 2, s.accent); 
+    
+    DrawTextEx(f, "Study & Bookmarks Manager", {px + 20, py + 20}, 24, 1, s.accent);
+    
+    static int filter = 0; // 0: All, 1: Bookmarks, 2: Notes
+    auto filterBtn = [&](float x, const char* lbl, int id) {
+        Rectangle r = {x, py + 60, 100, 30}; bool hov = CheckCollisionPointRec(GetMousePosition(), r);
+        DrawRectangleRec(r, filter == id ? s.accent : (hov ? s.vnum : s.bg)); DrawRectangleLinesEx(r, 1, s.vnum);
+        DrawTextEx(f, lbl, {r.x + (100 - MeasureTextEx(f, lbl, 14, 1).x)/2, r.y + 8}, 14, 1, (filter == id || hov) ? RAYWHITE : s.text);
+        if (hov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) filter = id;
+    };
+    filterBtn(px + 20, "Show All", 0); filterBtn(px + 130, "Bookmarks", 1); filterBtn(px + 240, "Notes", 2);
+    
+    Rectangle clrBtn = {px + pw - 120, py + 60, 100, 30}; bool clrHov = CheckCollisionPointRec(GetMousePosition(), clrBtn);
+    DrawRectangleRec(clrBtn, clrHov ? s.err : s.bg); DrawRectangleLinesEx(clrBtn, 1, s.err);
+    DrawTextEx(f, "Clear All", {clrBtn.x + 18, clrBtn.y + 8}, 14, 1, clrHov ? RAYWHITE : s.err);
+    if (clrHov && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) { g_study.ClearAll(); s.SetStatus("Collection cleared."); }
+
+    float y = py + 105; const auto& all = g_study.All();
+    std::vector<VerseData> filtered;
+    for (const auto& d : all) {
+        if (filter == 1 && !d.isBookmarked) continue;
+        if (filter == 2 && d.note.empty()) continue;
+        filtered.push_back(d);
+    }
+    
+    std::reverse(filtered.begin(), filtered.end()); // Show newest first
+
+    BeginScissorMode((int)px + 10, (int)y, (int)pw - 20, (int)ph - 160);
+    static float scroll = 0; if (CheckCollisionPointRec(GetMousePosition(), {px, y, pw, ph - 160})) scroll += GetMouseWheelMove() * 40;
+    if (scroll > 0) scroll = 0; float itemY = y + scroll;
+
+    for (const auto& vd : filtered) {
+        Rectangle r = {px + 20, itemY, pw - 40, 65}; if (itemY < y - 70 || itemY > py + ph - 60) { itemY += 75; continue; }
+        bool hov = CheckCollisionPointRec(GetMousePosition(), r);
+        DrawRectangleRec(r, hov ? Color{s.accent.r, s.accent.g, s.accent.b, 40} : Color{s.vnum.r, s.vnum.g, s.vnum.b, 20});
+        
+        // Highlights & Bookmarks Indicators
+        if (vd.highlightColor > 0) { Color hcs[] = {BLANK, YELLOW, GREEN, SKYBLUE, PINK}; DrawRectangle(r.x, r.y, 4, r.height, hcs[vd.highlightColor]); }
+        if (vd.isBookmarked) DrawTextEx(f, "BMK", {r.x + r.width - 85, r.y + 8}, 12, 1, s.vnum);
+
+        std::string lbl = vd.GetDisplay();
+        DrawTextEx(f, lbl.c_str(), {r.x + 12, r.y + 10}, 17, 1, s.accent);
+        
+        std::string preview = vd.text.empty() ? "(No verse preview)" : (vd.text.size() > 75 ? vd.text.substr(0, 72) + "..." : vd.text);
+        DrawTextEx(f, preview.c_str(), {r.x + 12, r.y + 32}, 14, 1, s.text);
+        
+        if (!vd.note.empty()) {
+            std::string nPrev = "Note: " + (vd.note.size() > 60 ? vd.note.substr(0, 57) + "..." : vd.note);
+            DrawTextEx(f, nPrev.c_str(), {r.x + 12, r.y + 48}, 12, 1, s.vnum);
+        }
+
+        // Action Buttons
+        Rectangle delR = {r.x + r.width - 40, r.y + 15, 30, 35}; bool delH = CheckCollisionPointRec(GetMousePosition(), delR);
+        DrawTextEx(f, "DEL", {delR.x, delR.y + 10}, 12, 1, delH ? s.err : s.vnum);
+        if (delH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) g_study.Remove(vd.book, vd.chapter, vd.verse, vd.translation);
+
+        if (hov && !delH && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            for (int j = 0; j < (int)BIBLE_BOOKS.size(); j++) if (vd.book == BIBLE_BOOKS[j].name) { s.curBookIdx = j; break; }
+            s.curChNum = vd.chapter; s.trans = vd.translation; s.lastSelectedVerse = vd.verse;
+            s.InitBuffer(); s.showFavorites = false;
+        }
+        itemY += 75;
+    }
+    EndScissorMode();
+
+    Rectangle cb = {px + pw - 120, py + ph - 50, 100, 34}; bool ch = CheckCollisionPointRec(GetMousePosition(), cb);
+    DrawRectangleRec(cb, ch ? s.accent : s.bg); DrawRectangleLinesEx(cb, 1, s.vnum); DrawTextEx(f, "Close", {cb.x + 28, cb.y + 8}, 18, 1, ch ? RAYWHITE : s.text);
+    if (ch && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) s.showFavorites = false;
 }
 
 void DrawCachePanel(AppState& s, Font f) {

@@ -38,6 +38,7 @@ public:
     VerseData* Get(const std::string& b, int ch, int v, const std::string& t);
     bool HasAny(const std::string& b, int ch, int v, const std::string& t) const;
     void Remove(const std::string& b, int ch, int v, const std::string& t);
+    void ClearAll();
     
     std::vector<VerseData> All() const;
 };

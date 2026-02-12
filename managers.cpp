@@ -217,6 +217,12 @@ void StudyManager::Remove(const std::string& b, int ch, int v, const std::string
     Save();
 }
 
+void StudyManager::ClearAll() {
+    std::lock_guard<std::mutex> lock(mtx);
+    data.clear();
+    Save();
+}
+
 std::vector<VerseData> StudyManager::All() const {
     std::lock_guard<std::mutex> lock(mtx);
     return data;
