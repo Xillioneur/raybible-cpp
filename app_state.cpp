@@ -98,7 +98,7 @@ void AppState::CopySelection() {
 
 void AppState::InitBuffer(bool resetScroll) {
     isLoading = true;
-    if (resetScroll) { targetScrollY = 0; scrollY = 0; scrollChapterIdx = 0; ClearSelection(); }
+    if (resetScroll) { targetScrollY = 0; scrollY = 0; scrollChapterIdx = 0; ClearSelection(); lastSelectedVerse = -1; isEditingNote = false; }
     PushTask([this]() {
         { std::lock_guard<std::mutex> lock(bufferMutex); buf.clear(); buf2.clear(); }
         Chapter c = LoadOrFetch(curBookIdx, curChNum, trans);
@@ -214,12 +214,12 @@ void AppState::CopyChapter() {
 void AppState::UpdateTitle() {
     std::lock_guard<std::mutex> lock(bufferMutex);
     int ci = bookMode ? (pageIdx < (int)pages.size() ? pages[pageIdx].chapterBufIndex : 0) : scrollChapterIdx;
+    std::string t = "Divine Word - Holy Bible " + version;
     if (ci < (int)buf.size() && buf[ci].isLoaded) { 
-        std::string t = "RayBible - " + buf[ci].book; 
+        t += " - " + buf[ci].book; 
         if (parallelMode) t += " / " + trans2; else t += " (" + trans + ")"; 
-        SetWindowTitle(t.c_str()); 
     }
-    else SetWindowTitle("RayBible");
+    SetWindowTitle(t.c_str());
 }
 
 void AppState::PushNavPoint(int b, int c) {

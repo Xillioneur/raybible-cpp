@@ -1,7 +1,9 @@
 #include "managers.h"
 #include "utils.h"
+#include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <sys/stat.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -9,30 +11,29 @@
     #include <dirent.h>
 #endif
 
-// --- CacheManager ---
+CacheManager g_cache;
+StudyManager g_study;
+HistoryManager g_hist;
+SettingsManager g_settings;
 
+// --- CacheManager ---
 CacheManager::CacheManager() { base = "cache"; MakeDir(base); }
 std::string CacheManager::Path(const std::string& t, const std::string& b, int c) const { return base + "/" + t + "/" + b + "/" + std::to_string(c) + ".json"; }
 std::string CacheManager::TDir(const std::string& t) const { return base + "/" + t; }
 std::string CacheManager::BDir(const std::string& t, const std::string& b) const { return base + "/" + t + "/" + b; }
 
-bool CacheManager::Has(const std::string& t, const std::string& b, int c) const { 
-    std::lock_guard<std::mutex> lock(mtx);
-    return FileExists(Path(t, b, c)); 
-}
+bool CacheManager::Has(const std::string& t, const std::string& b, int c) const { return FileExists(Path(t, b, c)); }
 
 Chapter CacheManager::Load(const std::string& t, const std::string& b, int cn) const {
     std::lock_guard<std::mutex> lock(mtx);
-    Chapter ch{};
-    ch.isLoaded = false;
     std::string json = ReadFile(Path(t, b, cn));
-    if (json.empty()) return ch;
-    ch.book        = JStr(json, "book");
-    ch.chapter     = JInt(json, "chapter");
+    Chapter ch{};
+    ch.book = JStr(json, "book");
+    ch.chapter = JInt(json, "chapter");
     ch.translation = JStr(json, "translation");
-    ch.fetchedAt   = JLong(json, "fetchedAt");
-    ch.fromCache   = true;
-    ch.isLoaded    = true;
+    ch.fetchedAt = (time_t)JLong(json, "fetchedAt");
+    ch.fromCache = true;
+    ch.isLoaded = true;
     for (const auto& v : JArr(json, "verses")) {
         Verse vr;
         vr.number = JInt(v, "number");
@@ -133,57 +134,92 @@ CacheStats CacheManager::Stats() const {
     return s;
 }
 
-// --- FavoritesManager ---
+// --- StudyManager ---
 
-FavoritesManager::FavoritesManager() { file = "favorites.txt"; Load(); }
-void FavoritesManager::Load() {
+StudyManager::StudyManager() { file = "study_data.txt"; Load(); }
+void StudyManager::Load() {
     std::string c = ReadFile(file);
     if (c.empty()) return;
     std::istringstream iss(c); std::string ln;
     while (std::getline(iss, ln)) {
         if (ln.empty()) continue;
-        std::istringstream ls(ln); Favorite f; std::string temp;
-        std::getline(ls, f.translation, '|');
-        std::getline(ls, f.book, '|');
-        std::getline(ls, temp, '|'); try { f.chapter = std::stoi(temp); } catch(...) { f.chapter = 1; }
-        std::getline(ls, temp, '|'); try { f.verse = std::stoi(temp); } catch(...) { f.verse = 1; }
-        std::getline(ls, temp, '|'); try { f.addedAt = (time_t)std::stoll(temp); } catch(...) { f.addedAt = 0; }
-        std::getline(ls, f.note);
-        if (!f.book.empty()) favs.push_back(f);
+        std::istringstream ls(ln); VerseData d; std::string temp;
+        std::getline(ls, d.translation, '|');
+        std::getline(ls, d.book, '|');
+        std::getline(ls, temp, '|'); try { d.chapter = std::stoi(temp); } catch(...) { d.chapter = 1; }
+        std::getline(ls, temp, '|'); try { d.verse = std::stoi(temp); } catch(...) { d.verse = 1; }
+        std::getline(ls, temp, '|'); try { d.highlightColor = std::stoi(temp); } catch(...) { d.highlightColor = 0; }
+        std::getline(ls, temp, '|'); try { d.isBookmarked = (temp == "1"); } catch(...) { d.isBookmarked = false; }
+        std::getline(ls, temp, '|'); try { d.addedAt = (time_t)std::stoll(temp); } catch(...) { d.addedAt = 0; }
+        std::getline(ls, d.text, '|');
+        std::getline(ls, d.note);
+        d.note = ReplaceAll(d.note, "\\n", "\n");
+        if (!d.book.empty()) data.push_back(d);
     }
 }
-void FavoritesManager::Save() {
+void StudyManager::Save() {
     std::ostringstream o;
-    for (const auto& f : favs)
-        o << f.translation << "|" << f.book << "|" << f.chapter << "|" << f.verse << "|" << (long long)f.addedAt << "|" << f.note << "\n";
+    for (const auto& d : data) {
+        std::string escapedNote = ReplaceAll(d.note, "\n", "\\n");
+        o << d.translation << "|" << d.book << "|" << d.chapter << "|" << d.verse << "|" << d.highlightColor << "|" << (d.isBookmarked ? "1" : "0") << "|" << (long long)d.addedAt << "|" << d.text << "|" << escapedNote << "\n";
+    }
     WriteFile(file, o.str());
 }
-void FavoritesManager::Add(const std::string& book, int ch, int v, const std::string& t, const std::string& verseText, const std::string& n) {
+
+void StudyManager::SetNote(const std::string& b, int ch, int v, const std::string& t, const std::string& note, const std::string& text) {
     std::lock_guard<std::mutex> lock(mtx);
-    Favorite f; f.book = book; f.chapter = ch; f.verse = v; f.translation = t; f.text = verseText; f.note = n; f.addedAt = time(nullptr);
-    for (const auto& ex : favs) if (ex.GetKey() == f.GetKey()) return;
-    favs.push_back(f); Save();
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (auto& d : data) {
+        if (d.GetKey() == k) { d.note = note; if (!text.empty()) d.text = text; Save(); return; }
+    }
+    VerseData d; d.book = b; d.chapter = ch; d.verse = v; d.translation = t; d.note = note; d.text = text; d.addedAt = time(nullptr);
+    data.push_back(d); Save();
 }
-void FavoritesManager::Remove(const std::string& book, int ch, int v, const std::string& t) {
+
+void StudyManager::SetHighlight(const std::string& b, int ch, int v, const std::string& t, int color, const std::string& text) {
     std::lock_guard<std::mutex> lock(mtx);
-    std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
-    favs.erase(std::remove_if(favs.begin(), favs.end(), [&k](const Favorite& f) { return f.GetKey() == k; }), favs.end());
-    Save();
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (auto& d : data) {
+        if (d.GetKey() == k) { d.highlightColor = color; if (!text.empty()) d.text = text; Save(); return; }
+    }
+    VerseData d; d.book = b; d.chapter = ch; d.verse = v; d.translation = t; d.highlightColor = color; d.text = text; d.addedAt = time(nullptr);
+    data.push_back(d); Save();
 }
-void FavoritesManager::UpdateNote(const std::string& book, int ch, int v, const std::string& t, const std::string& note) {
+
+void StudyManager::SetBookmark(const std::string& b, int ch, int v, const std::string& t, bool bookmarked, const std::string& text) {
     std::lock_guard<std::mutex> lock(mtx);
-    std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
-    for (auto& f : favs) { if (f.GetKey() == k) { f.note = note; Save(); break; } }
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (auto& d : data) {
+        if (d.GetKey() == k) { d.isBookmarked = bookmarked; if (!text.empty()) d.text = text; Save(); return; }
+    }
+    VerseData d; d.book = b; d.chapter = ch; d.verse = v; d.translation = t; d.isBookmarked = bookmarked; d.text = text; d.addedAt = time(nullptr);
+    data.push_back(d); Save();
 }
-bool FavoritesManager::Has(const std::string& book, int ch, int v, const std::string& t) const {
+
+VerseData* StudyManager::Get(const std::string& b, int ch, int v, const std::string& t) {
     std::lock_guard<std::mutex> lock(mtx);
-    std::string k = t + ":" + book + ":" + std::to_string(ch) + ":" + std::to_string(v);
-    for (const auto& f : favs) if (f.GetKey() == k) return true;
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (auto& d : data) if (d.GetKey() == k) return &d;
+    return nullptr;
+}
+
+bool StudyManager::HasAny(const std::string& b, int ch, int v, const std::string& t) const {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    for (const auto& d : data) if (d.GetKey() == k) return (d.highlightColor > 0 || d.isBookmarked || !d.note.empty());
     return false;
 }
-std::vector<Favorite> FavoritesManager::All() const {
+
+void StudyManager::Remove(const std::string& b, int ch, int v, const std::string& t) {
     std::lock_guard<std::mutex> lock(mtx);
-    return favs;
+    std::string k = t + ":" + b + ":" + std::to_string(ch) + ":" + std::to_string(v);
+    data.erase(std::remove_if(data.begin(), data.end(), [&k](const VerseData& d) { return d.GetKey() == k; }), data.end());
+    Save();
+}
+
+std::vector<VerseData> StudyManager::All() const {
+    std::lock_guard<std::mutex> lock(mtx);
+    return data;
 }
 
 // --- HistoryManager ---
@@ -228,46 +264,27 @@ std::vector<HistoryEntry> HistoryManager::All() const {
 void SettingsManager::Load() {
     std::string c = ReadFile(file);
     if (c.empty()) return;
-    std::istringstream iss(c); std::string key;
-    while (iss >> key) {
-        if (key == "theme") iss >> theme;
-        else if (key == "fontSize") iss >> fontSize;
-        else if (key == "lineSpacing") iss >> lineSpacing;
-        else if (key == "lastBookIdx") iss >> lastBookIdx;
-        else if (key == "lastChNum") iss >> lastChNum;
-        else if (key == "lastTransIdx") iss >> lastTransIdx;
-        else if (key == "parallelMode") iss >> parallelMode;
-        else if (key == "transIdx2") iss >> transIdx2;
-        else if (key == "bookMode") iss >> bookMode;
-        else if (key == "lastScrollY") iss >> lastScrollY;
-        else if (key == "lastPageIdx") iss >> lastPageIdx;
-        else if (key == "winW") iss >> winW;
-        else if (key == "winH") iss >> winH;
-        else if (key == "winX") iss >> winX;
-        else if (key == "winY") iss >> winY;
+    std::istringstream iss(c); std::string k, v;
+    while (iss >> k >> v) {
+        if (k == "theme") theme = std::stoi(v);
+        else if (k == "fontSize") fontSize = std::stof(v);
+        else if (k == "lineSpacing") lineSpacing = std::stof(v);
+        else if (k == "lastBookIdx") lastBookIdx = std::stoi(v);
+        else if (k == "lastChNum") lastChNum = std::stoi(v);
+        else if (k == "lastTransIdx") lastTransIdx = std::stoi(v);
+        else if (k == "parallelMode") parallelMode = (v == "1");
+        else if (k == "transIdx2") transIdx2 = std::stoi(v);
+        else if (k == "bookMode") bookMode = (v == "1");
+        else if (k == "lastScrollY") lastScrollY = std::stof(v);
+        else if (k == "lastPageIdx") lastPageIdx = std::stoi(v);
+        else if (k == "winW") winW = std::stoi(v);
+        else if (k == "winH") winH = std::stoi(v);
+        else if (k == "winX") winX = std::stoi(v);
+        else if (k == "winY") winY = std::stoi(v);
     }
 }
 void SettingsManager::Save() {
     std::ostringstream o;
-    o << "theme " << theme << "\n" 
-      << "fontSize " << fontSize << "\n" 
-      << "lineSpacing " << lineSpacing << "\n"
-      << "lastBookIdx " << lastBookIdx << "\n" 
-      << "lastChNum " << lastChNum << "\n" 
-      << "lastTransIdx " << lastTransIdx << "\n"
-      << "parallelMode " << parallelMode << "\n" 
-      << "transIdx2 " << transIdx2 << "\n" 
-      << "bookMode " << bookMode << "\n"
-      << "lastScrollY " << lastScrollY << "\n"
-      << "lastPageIdx " << lastPageIdx << "\n"
-      << "winW " << winW << "\n"
-      << "winH " << winH << "\n"
-      << "winX " << winX << "\n"
-      << "winY " << winY << "\n";
+    o << "theme " << theme << "\nfontSize " << fontSize << "\nlineSpacing " << lineSpacing << "\nlastBookIdx " << lastBookIdx << "\nlastChNum " << lastChNum << "\nlastTransIdx " << lastTransIdx << "\nparallelMode " << (parallelMode ? "1" : "0") << "\ntransIdx2 " << transIdx2 << "\nbookMode " << (bookMode ? "1" : "0") << "\nlastScrollY " << lastScrollY << "\nlastPageIdx " << lastPageIdx << "\nwinW " << winW << "\nwinH " << winH << "\nwinX " << winX << "\nwinY " << winY << "\n";
     WriteFile(file, o.str());
 }
-
-CacheManager g_cache;
-FavoritesManager g_favs;
-HistoryManager g_hist;
-SettingsManager g_settings;

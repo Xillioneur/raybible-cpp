@@ -62,10 +62,17 @@ struct AppState {
     int gSearchProgress = 0;
     float gSearchThreadTimer = 0;
 
+    // --- UI Layout ---
+    bool  showSidebar = false;
+    float sidebarWidth = 320.0f;
+    int   lastSelectedVerse = -1;
+
     // --- Mode ---
     bool bookMode = false;
     int  theme = 0; // 0: Dark, 1: Light, 2: Sepia, 3: Parchment
     bool studyMode = false; // Enables Strong's numbers
+    bool zenMode = false;   // Distraction-free reading mode
+    const std::string version = "v0.1 - Divine Word";
 
     // --- Word Study ---
     bool showWordStudy = false;
@@ -119,6 +126,8 @@ struct AppState {
     bool showPlan      = false;
     bool showBurgerMenu = false;
     bool showNoteEditor = false;
+    bool showAbout      = false;
+    bool isEditingNote  = false;
     char jumpBuf[128]{};
     char noteBuf[512]{};
     std::string selectedFavoriteKey;
@@ -163,7 +172,7 @@ struct AppState {
     void StartGlobalSearch();
     void UpdateGlobalSearch();
     void Update(); // Main thread update
-    bool InputActive() const { return showSearch || showJump || showGlobalSearch || showNoteEditor || showWordStudy; }
+    bool InputActive() const { return showSearch || showJump || showGlobalSearch || showNoteEditor || showWordStudy || showAbout || isEditingNote; }
 };
 
 #endif // APP_STATE_H

@@ -22,19 +22,24 @@ public:
     CacheStats Stats() const;
 };
 
-class FavoritesManager {
-    std::vector<Favorite> favs;
+class StudyManager {
+    std::vector<VerseData> data;
     std::string file;
     mutable std::mutex mtx;
     void Load();
     void Save();
 public:
-    FavoritesManager();
-    void Add(const std::string& book, int ch, int v, const std::string& t, const std::string& verseText = "", const std::string& n = "");
-    void Remove(const std::string& book, int ch, int v, const std::string& t);
-    void UpdateNote(const std::string& book, int ch, int v, const std::string& t, const std::string& note);
-    bool Has(const std::string& book, int ch, int v, const std::string& t) const;
-    std::vector<Favorite> All() const; // Return copy for thread safety
+    StudyManager();
+    // CRUD
+    void SetNote(const std::string& b, int ch, int v, const std::string& t, const std::string& note, const std::string& text = "");
+    void SetHighlight(const std::string& b, int ch, int v, const std::string& t, int color, const std::string& text = "");
+    void SetBookmark(const std::string& b, int ch, int v, const std::string& t, bool bookmarked, const std::string& text = "");
+    
+    VerseData* Get(const std::string& b, int ch, int v, const std::string& t);
+    bool HasAny(const std::string& b, int ch, int v, const std::string& t) const;
+    void Remove(const std::string& b, int ch, int v, const std::string& t);
+    
+    std::vector<VerseData> All() const;
 };
 
 class HistoryManager {
@@ -76,7 +81,7 @@ public:
 };
 
 extern CacheManager g_cache;
-extern FavoritesManager g_favs;
+extern StudyManager g_study;
 extern HistoryManager g_hist;
 extern SettingsManager g_settings;
 

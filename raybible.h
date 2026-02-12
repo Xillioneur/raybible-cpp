@@ -64,13 +64,15 @@ struct StrongsDef {
     bool active = false;
 };
 
-struct Favorite {
+struct VerseData {
     std::string book;
     std::string translation;
     std::string note;
     std::string text;
     int chapter;
     int verse;
+    int highlightColor = 0; // 0: None, 1: Yellow, 2: Green, 3: Blue, 4: Pink
+    bool isBookmarked = false;
     time_t addedAt;
 
     std::string GetKey() const {

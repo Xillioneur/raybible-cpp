@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(RayBible VERSION 1.0.0 LANGUAGES CXX)
+project(DivineWord VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,7 +18,7 @@ if (NOT raylib_FOUND)
 endif()
 
 # Executable
-add_executable(raybible 
+add_executable(DivineWord 
     main.cpp 
     bible_data.cpp
     utils.cpp 
@@ -29,22 +29,22 @@ add_executable(raybible
 )
 
 # Link libraries
-target_link_libraries(raybible PRIVATE raylib)
+target_link_libraries(DivineWord PRIVATE raylib)
 
 # Platform-specific HTTP libraries
 if (WIN32)
     # Windows uses WinINet (already linked via pragma in code)
-    target_link_libraries(raybible PRIVATE wininet)
+    target_link_libraries(DivineWord PRIVATE wininet)
 else()
     # Linux/macOS uses libcurl
     find_package(CURL REQUIRED)
-    target_link_libraries(raybible PRIVATE CURL::libcurl)
+    target_link_libraries(DivineWord PRIVATE CURL::libcurl)
 endif()
 
 # Platform-specific settings
 if (APPLE)
-    target_link_libraries(raybible PRIVATE "-framework IOKit" "-framework Cocoa" "-framework OpenGL")
+    target_link_libraries(DivineWord PRIVATE "-framework IOKit" "-framework Cocoa" "-framework OpenGL")
 endif()
 
 # Install target
-install(TARGETS raybible DESTINATION bin)
+install(TARGETS DivineWord DESTINATION bin)

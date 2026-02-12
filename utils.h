@@ -19,6 +19,7 @@ void CopyToClipboard(const std::string& text);
 // String helpers
 std::string ToLower(const std::string& s);
 std::string StripTags(const std::string& s);
+std::string ReplaceAll(std::string str, const std::string& from, const std::string& to);
 
 // JSON Parser (simple)
 std::string JStr(const std::string& j, const std::string& k);
